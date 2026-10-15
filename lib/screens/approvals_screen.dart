@@ -64,12 +64,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             child: const Text('გაუქმება'),
           ),
           FilledButton.tonal(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade100),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+            ),
             onPressed: () async {
               Navigator.pop(context);
               await _submitAction(requestId, 'REJECT', commentController.text);
             },
-            child: const Text('უარყოფა', style: TextStyle(color: Colors.red)),
+            child: const Text('უარყოფა'),
           ),
           FilledButton(
             onPressed: () async {

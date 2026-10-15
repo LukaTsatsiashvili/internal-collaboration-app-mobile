@@ -69,16 +69,16 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.hub, size: 80, color: Colors.blue),
-            SizedBox(height: 24),
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('იტვირთება სივრცე...', style: TextStyle(color: Colors.grey)),
+            Icon(Icons.hub, size: 80, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text('იტვირთება სივრცე...', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ],
         ),
       ),

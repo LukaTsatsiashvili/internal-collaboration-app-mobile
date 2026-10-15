@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_theme_extensions.dart';
 import 'dashboard_screen.dart';
 import 'chats_screen.dart';
 import 'tasks_screen.dart';
@@ -33,16 +35,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   // Floating bottom navigation inspired by the provided Stitch design.
   // Uses the same light/dark palette as the Messages screen.
   Widget _buildFloatingNavigation(BuildContext context) {
-    final isDark = Theme.of(context).colorScheme.brightness == Brightness.dark;
-    final background = isDark
-        ? const Color(0xFF101827)
-        : const Color(0xFFEDF2FE);
-    final surface = isDark
-        ? const Color(0xFF243149)
-        : const Color(0xFFFDFEFF);
-    final inactiveIcon = isDark
-        ? const Color(0xFF9DADC7)
-        : const Color(0xFF778AA5);
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    final background = palette.page;
+    final surface = palette.navigation;
+    final inactiveIcon = palette.navigationInactive;
 
     const destinations = <IconData>[
       Icons.grid_view_rounded,
@@ -79,15 +75,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               color: surface,
               borderRadius: BorderRadius.circular(40),
               border: Border.all(
-                color: isDark
-                    ? const Color(0xFF34435B)
-                    : Colors.white,
+                color: palette.navigationBorder,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: isDark
-                      ? Colors.black.withValues(alpha: 0.28)
-                      : const Color(0xFF7183A3).withValues(alpha: 0.15),
+                  color: palette.navigationShadow,
                   blurRadius: 24,
                   offset: const Offset(0, 6),
                 ),
@@ -110,14 +102,17 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                           curve: Curves.easeOutCubic,
                           decoration: BoxDecoration(
                             color: selected
-                                ? const Color(0xFF2465EE)
+                                ? AppColors.primary
                                 : Colors.transparent,
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: selected
                                 ? [
                                     BoxShadow(
-                                      color: const Color(0xFF2465EE)
-                                          .withValues(alpha: isDark ? 0.36 : 0.30),
+                                      color: AppColors.primary.withValues(
+                                        alpha: Theme.of(context).brightness == Brightness.dark
+                                            ? 0.36
+                                            : 0.30,
+                                      ),
                                       blurRadius: 16,
                                       offset: const Offset(0, 4),
                                     ),

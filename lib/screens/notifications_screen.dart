@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/theme/app_theme_extensions.dart';
 
 class NotificationsScreen extends StatelessWidget {
   const NotificationsScreen({super.key});
@@ -55,9 +56,9 @@ class NotificationsScreen extends StatelessWidget {
     required bool isRead,
     required BuildContext context,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Container(
-      color: isRead ? Colors.transparent : (isDark ? Colors.blue.shade900.withValues(alpha: 0.3) : Colors.blue.shade50),
+      color: isRead ? Colors.transparent : palette.unreadBackground,
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: color.withValues(alpha: 0.2),
@@ -70,7 +71,7 @@ class NotificationsScreen extends StatelessWidget {
             const SizedBox(height: 2),
             Text(description),
             const SizedBox(height: 4),
-            Text(time, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(time, style: TextStyle(fontSize: 10, color: palette.muted)),
           ],
         ),
         isThreeLine: true,

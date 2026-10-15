@@ -166,11 +166,11 @@ class _TasksScreenState extends State<TasksScreen>
           ),
           children: groupTasks.isEmpty
               ? [
-                  const Padding(
-                    padding: EdgeInsets.all(12.0),
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
                     child: Text(
                       'No tasks in this group.',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                     ),
                   ),
                 ]
@@ -215,7 +215,7 @@ class _TasksScreenState extends State<TasksScreen>
                       description,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.grey, fontSize: 13),
+                      style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 13),
                     ),
                   ],
                   const SizedBox(height: 8),
@@ -226,10 +226,10 @@ class _TasksScreenState extends State<TasksScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.person,
                             size: 14,
-                            color: Colors.blueGrey,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 4),
                           ConstrainedBox(

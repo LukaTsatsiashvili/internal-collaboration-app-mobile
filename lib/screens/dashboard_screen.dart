@@ -144,7 +144,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 12),
             Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            Text(title, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12)),
           ],
         ),
       ),

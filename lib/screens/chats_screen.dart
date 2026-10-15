@@ -3,6 +3,8 @@ import 'package:dio/dio.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../core/theme/app_colors.dart';
+import '../core/theme/app_theme_extensions.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
@@ -20,41 +22,23 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
-  // Keep the approved Stitch light palette; switch to a high-contrast dark
-  // palette whenever the app's MaterialApp ThemeMode changes.
-  bool get _isDark =>
-      Theme.of(context).colorScheme.brightness == Brightness.dark;
-
-  Color get _ink =>
-      _isDark ? const Color(0xFFF4F7FF) : const Color(0xFF151F36);
-  Color get _muted =>
-      _isDark ? const Color(0xFF9DADC7) : const Color(0xFF8998B2);
-  Color get _page =>
-      _isDark ? const Color(0xFF101827) : const Color(0xFFEDF2FE);
-  Color get _surface =>
-      _isDark ? const Color(0xFF192437) : const Color(0xFFFAFCFF);
-  Color get _card =>
-      _isDark ? const Color(0xFF243149) : const Color(0xFFFEFEFF);
-  Color get _cardBorder =>
-      _isDark ? const Color(0xFF32415A) : const Color(0xFFF2F5FB);
-  Color get _searchBackground =>
-      _isDark ? const Color(0xFF202C41) : const Color(0xFFFCFDFE);
-  Color get _secondaryText =>
-      _isDark ? const Color(0xFFAABAD3) : const Color(0xFF687995);
-  Color get _previewText =>
-      _isDark ? const Color(0xFFB2C0D6) : const Color(0xFF8392A9);
-  Color get _hintColor =>
-      _isDark ? const Color(0xFF95A6C0) : const Color(0xFFA2AEC1);
-  Color get _searchIconColor =>
-      _isDark ? const Color(0xFF98AAC7) : const Color(0xFFB3C0D5);
-  Color get _linkColor => _isDark ? const Color(0xFF84B0FF) : _blue;
-  Color get _cardShadow => _isDark
-      ? Colors.black.withValues(alpha: 0.18)
-      : const Color(0xFF53657F).withValues(alpha: 0.045);
-  Color get _surfaceShadow => _isDark
-      ? Colors.black.withValues(alpha: 0.24)
-      : const Color(0xFF7183A3).withValues(alpha: 0.09);
-  static const Color _blue = Color(0xFF2465EE);
+  // All Messages colors now come from the app-wide ThemeExtension.
+  AppPalette get _palette => Theme.of(context).extension<AppPalette>()!;
+  Color get _ink => _palette.ink;
+  Color get _muted => _palette.muted;
+  Color get _page => _palette.page;
+  Color get _surface => _palette.panel;
+  Color get _card => _palette.card;
+  Color get _cardBorder => _palette.cardBorder;
+  Color get _searchBackground => _palette.searchBackground;
+  Color get _secondaryText => _palette.secondaryText;
+  Color get _previewText => _palette.previewText;
+  Color get _hintColor => _palette.hintText;
+  Color get _searchIconColor => _palette.searchIcon;
+  Color get _linkColor => _palette.link;
+  Color get _cardShadow => _palette.cardShadow;
+  Color get _surfaceShadow => _palette.panelShadow;
+  static const Color _blue = AppColors.primary;
 
   final ChatService _chatService = ChatService();
   final TextEditingController _searchController = TextEditingController();
@@ -287,7 +271,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
               child: Ink(
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
-                    colors: [Color(0xFF2369F1), Color(0xFF4F43EB)],
+                    colors: [AppColors.gradientStart, AppColors.gradientEnd],
                   ),
                   borderRadius: BorderRadius.circular(24),
                   boxShadow: [
@@ -452,7 +436,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         height: 11,
                         width: 11,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF15C795),
+                          color: AppColors.success,
                           shape: BoxShape.circle,
                           border: Border.all(color: _card, width: 2),
                         ),

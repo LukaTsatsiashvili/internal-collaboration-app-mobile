@@ -73,7 +73,7 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.lock_person_outlined, size: 80, color: Colors.blue),
+              Icon(Icons.lock_person_outlined, size: 80, color: Theme.of(context).colorScheme.primary),
               const SizedBox(height: 24),
               const Text(
                 'შედით სისტემაში',
@@ -104,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 Text(
                   _errorMessage!,
-                  style: const TextStyle(color: Colors.red, fontSize: 14),
+                  style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14),
                   textAlign: TextAlign.center,
                 ),
               ],

@@ -1,5 +1,6 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'core/theme/app_theme.dart';
 
 import 'features/auth/data/presentation/splash_screen.dart';
 
@@ -38,21 +39,8 @@ class _InternalCollaborationAppState extends State<InternalCollaborationApp> {
     return MaterialApp(
       title: 'Internal Collaboration',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        fontFamily: 'Roboto',
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       themeMode: _themeMode,
       home: SplashScreen(
         onToggleTheme: _toggleTheme,

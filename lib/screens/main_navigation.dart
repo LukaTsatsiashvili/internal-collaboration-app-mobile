@@ -174,22 +174,121 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 }
 
-List<Widget> buildGlobalActions(BuildContext context, VoidCallback onToggleTheme, VoidCallback onChangeLanguage, String currentLanguage, ThemeMode currentThemeMode) {
+// Dashboard actions keep the original notification and profile callbacks.
+// Only the buttons and popup menu items are styled to match the app theme.
+PopupMenuItem<String> _profileMenuItem(
+  BuildContext context, {
+  required String value,
+  required IconData icon,
+  required String title,
+  required String subtitle,
+  bool destructive = false,
+}) {
+  final palette = Theme.of(context).extension<AppPalette>()!;
+  final accent = destructive ? Theme.of(context).colorScheme.error : palette.link;
+  return PopupMenuItem<String>(
+    value: value,
+    height: 66,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    child: Row(
+      children: [
+        Container(
+          width: 39,
+          height: 39,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(icon, size: 20, color: accent),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: destructive ? accent : palette.ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: palette.secondaryText,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          Icons.chevron_right_rounded,
+          color: palette.muted,
+          size: 18,
+        ),
+      ],
+    ),
+  );
+}
+
+List<Widget> buildGlobalActions(
+  BuildContext context,
+  VoidCallback onToggleTheme,
+  VoidCallback onChangeLanguage,
+  String currentLanguage,
+  ThemeMode currentThemeMode,
+) {
+  final palette = Theme.of(context).extension<AppPalette>()!;
   return [
-    IconButton(
-      icon: const Icon(Icons.notifications_outlined),
-      onPressed: () {
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
-      },
+    Padding(
+      padding: const EdgeInsets.only(right: 9),
+      child: Container(
+        width: 39,
+        height: 39,
+        decoration: BoxDecoration(
+          color: palette.card,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: palette.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: palette.cardShadow,
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: IconButton(
+          tooltip: 'შეტყობინებები',
+          padding: EdgeInsets.zero,
+          onPressed: () {
+            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+          },
+          icon: Icon(
+            Icons.notifications_none_rounded,
+            color: palette.ink,
+            size: 22,
+          ),
+        ),
+      ),
     ),
     Padding(
-      padding: const EdgeInsets.only(right: 12.0),
+      padding: const EdgeInsets.only(right: 14),
       child: PopupMenuButton<String>(
-        offset: const Offset(0, 50),
-        icon: const CircleAvatar(
-          radius: 16,
-          backgroundColor: Colors.blueAccent,
-          child: Text('ლ', style: TextStyle(color: Colors.white, fontSize: 14)),
+        tooltip: 'პროფილის მენიუ',
+        offset: const Offset(0, 46),
+        elevation: 9,
+        color: palette.panel,
+        surfaceTintColor: Colors.transparent,
+        constraints: const BoxConstraints(minWidth: 254, maxWidth: 286),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(21),
+          side: BorderSide(color: palette.cardBorder),
         ),
         onSelected: (value) async {
           if (value == 'theme') {
@@ -218,33 +317,61 @@ List<Widget> buildGlobalActions(BuildContext context, VoidCallback onToggleTheme
             }
           }
         },
-        itemBuilder: (BuildContext context) => [
-          PopupMenuItem<String>(
-            value: 'theme',
-            child: Row(children: [
-              Icon(currentThemeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode, size: 20),
-              const SizedBox(width: 10),
-              Text(currentThemeMode == ThemeMode.dark ? 'ნათელი თემა (Light)' : 'მუქი თემა (Dark)'),
-            ]),
-          ),
-          PopupMenuItem<String>(
+        itemBuilder: (popupContext) => [
+          _profileMenuItem(
+            popupContext,
             value: 'language',
-            child: Row(children: [
-              const Icon(Icons.language, size: 20),
-              const SizedBox(width: 10),
-              Text('ენა: ${currentLanguage == 'ka' ? 'ქართული' : 'English'}'),
-            ]),
+            icon: Icons.translate_rounded,
+            title: 'ენის შეცვლა',
+            subtitle: 'ქართული / English',
           ),
-          const PopupMenuDivider(),
-          const PopupMenuItem<String>(
+          _profileMenuItem(
+            popupContext,
+            value: 'theme',
+            icon: Theme.of(popupContext).brightness == Brightness.dark
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined,
+            title: 'თემის შეცვლა',
+            subtitle: 'Light / Dark',
+          ),
+          _profileMenuItem(
+            popupContext,
             value: 'logout',
-            child: Row(children: [
-              Icon(Icons.logout, size: 20, color: Colors.red),
-              SizedBox(width: 10),
-              Text('გასვლა (Log Out)', style: TextStyle(color: Colors.red)),
-            ]),
+            icon: Icons.logout_rounded,
+            title: 'გასვლა',
+            subtitle: 'სისტემიდან გასვლა',
+            destructive: true,
           ),
         ],
+        child: Container(
+          width: 39,
+          height: 39,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.gradientStart, AppColors.gradientEnd],
+            ),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.7),
+              width: 1.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.20),
+                blurRadius: 9,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.account_circle_outlined,
+            color: Colors.white,
+            size: 23,
+          ),
+        ),
       ),
     ),
   ];

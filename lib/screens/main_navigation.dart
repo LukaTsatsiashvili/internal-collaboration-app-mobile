@@ -29,6 +29,134 @@ class MainNavigationScreen extends StatefulWidget {
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
 
+
+  // Floating bottom navigation inspired by the provided Stitch design.
+  // Uses the same light/dark palette as the Messages screen.
+  Widget _buildFloatingNavigation(BuildContext context) {
+    final isDark = Theme.of(context).colorScheme.brightness == Brightness.dark;
+    final background = isDark
+        ? const Color(0xFF101827)
+        : const Color(0xFFEDF2FE);
+    final surface = isDark
+        ? const Color(0xFF243149)
+        : const Color(0xFFFDFEFF);
+    final inactiveIcon = isDark
+        ? const Color(0xFF9DADC7)
+        : const Color(0xFF778AA5);
+
+    const destinations = <IconData>[
+      Icons.grid_view_rounded,
+      Icons.chat_bubble_outline_rounded,
+      Icons.task_outlined,
+      Icons.approval_outlined,
+      Icons.folder_outlined,
+    ];
+    const selectedDestinations = <IconData>[
+      Icons.grid_view_rounded,
+      Icons.chat_bubble_rounded,
+      Icons.task_rounded,
+      Icons.approval_rounded,
+      Icons.folder_rounded,
+    ];
+    const labels = <String>[
+      'მთავარი',
+      'ჩათები',
+      'დავალებები',
+      'მოთხოვნები',
+      'Drive',
+    ];
+
+    return ColoredBox(
+      color: background,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+          child: Container(
+            height: 72,
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(40),
+              border: Border.all(
+                color: isDark
+                    ? const Color(0xFF34435B)
+                    : Colors.white,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.28)
+                      : const Color(0xFF7183A3).withValues(alpha: 0.15),
+                  blurRadius: 24,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: List.generate(destinations.length, (index) {
+                final selected = _currentIndex == index;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Tooltip(
+                      message: labels[index],
+                      child: Semantics(
+                        button: true,
+                        selected: selected,
+                        label: labels[index],
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutCubic,
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF2465EE)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: selected
+                                ? [
+                                    BoxShadow(
+                                      color: const Color(0xFF2465EE)
+                                          .withValues(alpha: isDark ? 0.36 : 0.30),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: Material(
+                            type: MaterialType.transparency,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(22),
+                              onTap: () {
+                                setState(() {
+                                  _currentIndex = index;
+                                });
+                              },
+                              child: Center(
+                                child: Icon(
+                                  selected
+                                      ? selectedDestinations[index]
+                                      : destinations[index],
+                                  size: 25,
+                                  color: selected ? Colors.white : inactiveIcon,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<Widget> screens = [
@@ -46,22 +174,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
     return Scaffold(
       body: screens[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'მთავარი'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'ჩათები'),
-          NavigationDestination(icon: Icon(Icons.task_outlined), selectedIcon: Icon(Icons.task), label: 'დავალებები'),
-          NavigationDestination(icon: Icon(Icons.approval_outlined), selectedIcon: Icon(Icons.approval), label: 'მოთხოვნები'),
-          NavigationDestination(icon: Icon(Icons.folder_outlined), selectedIcon: Icon(Icons.folder), label: 'Drive'),
-        ],
-      ),
+      bottomNavigationBar: _buildFloatingNavigation(context),
     );
   }
 }

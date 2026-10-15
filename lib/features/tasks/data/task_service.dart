@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../../../core/network/api_client.dart';
 
 class TaskService {
@@ -21,36 +22,61 @@ class TaskService {
         return response.data['data'] as List<dynamic>;
       }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა დავალებების ჩატვირთვა');
+      throw Exception(
+        e.response?.data['error']['message'] ??
+            'ვერ მოხერხდა დავალებების ჩატვირთვა',
+      );
     }
     return [];
   }
 
-  // 2. დეპარტამენტების / ჯგუფების წამოღება
-  Future<List<dynamic>> getDepartments() async {
+  // Personal task groups belong to the signed-in user, not a department.
+  Future<List<dynamic>> getTaskGroups() async {
     try {
-      final response = await _apiClient.dio.get('/departments');
-      if (response.statusCode == 200 && response.data['success'] == true) {
+      final response = await _apiClient.dio.get('/tasks/groups');
+      if (response.data['success'] == true) {
         return response.data['data'] as List<dynamic>;
       }
+      throw Exception('დავალებების ჯგუფები ვერ ჩაიტვირთა');
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა ჯგუფების ჩატვირთვა');
+      throw Exception(
+        e.response?.data?['error']?['message'] ??
+            'დავალებების ჯგუფები ვერ ჩაიტვირთა',
+      );
     }
-    return [];
   }
 
-  // 3. ახალი ჯგუფის შექმნა
-  Future<void> createDepartment({required String name}) async {
+  Future<void> createTaskGroup({required String name}) async {
     try {
-      await _apiClient.dio.post(
-        '/departments',
-        data: {
-          'name': name,
-          'code': name.toUpperCase().replaceAll(' ', '_'),
-        },
+      final response = await _apiClient.dio.post(
+        '/tasks/groups',
+        data: {'name': name.trim()},
       );
+      if (response.data['success'] != true) {
+        throw Exception('ჯგუფის შექმნა ვერ მოხერხდა');
+      }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა ჯგუფის შექმნა');
+      throw Exception(
+        e.response?.data?['error']?['message'] ?? 'ჯგუფის შექმნა ვერ მოხერხდა',
+      );
+    }
+  }
+
+  // Changing a personal layout never changes the task's department.
+  Future<void> moveTaskToGroup(String taskId, String? groupId) async {
+    try {
+      final response = await _apiClient.dio.put(
+        '/tasks/$taskId/layout',
+        data: {'groupId': groupId},
+      );
+      if (response.data['success'] != true) {
+        throw Exception('დავალების ჯგუფის შეცვლა ვერ მოხერხდა');
+      }
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?['error']?['message'] ??
+            'დავალების ჯგუფის შეცვლა ვერ მოხერხდა',
+      );
     }
   }
 
@@ -62,7 +88,10 @@ class TaskService {
         return response.data['data'] as List<dynamic>;
       }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა მომხმარებლების წამოღება');
+      throw Exception(
+        e.response?.data['error']['message'] ??
+            'ვერ მოხერხდა მომხმარებლების წამოღება',
+      );
     }
     return [];
   }
@@ -75,11 +104,14 @@ class TaskService {
       });
 
       final response = await _apiClient.dio.post('/files', data: formData);
-      if (response.statusCode == 200 && response.data['success'] == true) {
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          response.data['success'] == true) {
         return response.data['data']['id'];
       }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ფაილის ატვირთვა ვერ მოხერხდა');
+      throw Exception(
+        e.response?.data['error']['message'] ?? 'ფაილის ატვირთვა ვერ მოხერხდა',
+      );
     }
     return null;
   }
@@ -89,7 +121,7 @@ class TaskService {
     required String title,
     String? description,
     String? assigneeId,
-    String? departmentId,
+    String? groupId,
     String? priority,
     String? dueDate,
     List<String>? participantIds,
@@ -100,29 +132,35 @@ class TaskService {
         '/tasks',
         data: {
           'title': title,
-          if (description != null && description.isNotEmpty) 'description': description,
-          if (assigneeId != null && assigneeId.isNotEmpty) 'assigneeId': assigneeId,
-          if (departmentId != null && departmentId.isNotEmpty) 'departmentId': departmentId,
+          if (description != null && description.isNotEmpty)
+            'description': description,
+          if (assigneeId != null && assigneeId.isNotEmpty)
+            'assigneeId': assigneeId,
+          if (groupId != null && groupId.isNotEmpty) 'groupId': groupId,
           'priority': ?priority,
           'dueDate': ?dueDate,
-          if (participantIds != null && participantIds.isNotEmpty) 'participantIds': participantIds,
-          if (attachmentIds != null && attachmentIds.isNotEmpty) 'attachmentIds': attachmentIds,
+          if (participantIds != null && participantIds.isNotEmpty)
+            'participantIds': participantIds,
+          if (attachmentIds != null && attachmentIds.isNotEmpty)
+            'attachmentIds': attachmentIds,
         },
       );
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა დავალების შექმნა');
+      throw Exception(
+        e.response?.data['error']['message'] ?? 'ვერ მოხერხდა დავალების შექმნა',
+      );
     }
   }
 
   // 7. სტატუსის განახლება
   Future<void> updateTaskStatus(String taskId, String newStatus) async {
     try {
-      await _apiClient.dio.patch(
-        '/tasks/$taskId',
-        data: {'status': newStatus},
-      );
+      await _apiClient.dio.patch('/tasks/$taskId', data: {'status': newStatus});
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ვერ მოხერხდა სტატუსის განახლება');
+      throw Exception(
+        e.response?.data['error']['message'] ??
+            'ვერ მოხერხდა სტატუსის განახლება',
+      );
     }
   }
 }

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:file_selector/file_selector.dart';
+
+import 'task_group_dialog.dart';
+import 'task_create_sheet.dart';
+
 import '../features/tasks/data/task_service.dart';
 
 class TasksScreen extends StatefulWidget {
@@ -9,13 +12,17 @@ class TasksScreen extends StatefulWidget {
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStateMixin {
+class _TasksScreenState extends State<TasksScreen>
+    with SingleTickerProviderStateMixin {
   final TaskService _taskService = TaskService();
   late TabController _tabController;
 
   bool _isLoading = true;
+  bool _isCreatingGroup = false;
+  bool _isCreatingTask = false;
+  int _loadRequestId = 0;
   List<dynamic> _tasks = [];
-  List<dynamic> _departments = [];
+  List<dynamic> _groups = [];
   String? _errorMessage;
 
   final List<String?> _statuses = [null, 'OPEN', 'IN_PROGRESS', 'COMPLETED'];
@@ -33,6 +40,8 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   }
 
   Future<void> _loadData() async {
+    final requestId = ++_loadRequestId;
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -42,26 +51,28 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       final statusFilter = _statuses[_tabController.index];
       final results = await Future.wait([
         _taskService.getTasks(status: statusFilter),
-        _taskService.getDepartments(),
+        _taskService.getTaskGroups(),
       ]);
-
+      if (!mounted || requestId != _loadRequestId) return;
       setState(() {
         _tasks = results[0];
-        _departments = results[1];
+        _groups = results[1];
       });
-    } catch (e) {
+    } catch (error) {
+      if (!mounted || requestId != _loadRequestId) return;
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = error.toString().replaceAll('Exception: ', '');
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted && requestId == _loadRequestId) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   void dispose() {
+    _loadRequestId++;
     _tabController.dispose();
     super.dispose();
   }
@@ -75,7 +86,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
           IconButton(
             icon: const Icon(Icons.create_new_folder_outlined),
             tooltip: 'New group',
-            onPressed: _showNewGroupDialog,
+            onPressed: _isCreatingGroup ? null : _showNewGroupDialog,
           ),
         ],
         bottom: TabBar(
@@ -92,13 +103,18 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _errorMessage != null
-              ? Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.red)))
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  child: _buildGroupedTaskList(),
-                ),
+          ? Center(
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadData,
+              child: _buildGroupedTaskList(),
+            ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showNewTaskBottomSheet,
+        onPressed: _isCreatingTask ? null : _showNewTaskBottomSheet,
         icon: const Icon(Icons.add),
         label: const Text('New task'),
       ),
@@ -106,48 +122,57 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
   }
 
   Widget _buildGroupedTaskList() {
-    final Map<String?, List<dynamic>> groupedTasks = {};
-    
-    for (var dept in _departments) {
-      groupedTasks[dept['id']] = [];
-    }
-    groupedTasks[null] = [];
+    final Map<String?, List<dynamic>> groupedTasks = {
+      for (final group in _groups) group['id'].toString(): <dynamic>[],
+      null: <dynamic>[],
+    };
+    final tasksById = {for (final task in _tasks) task['id']?.toString(): task};
 
-    for (var task in _tasks) {
-      final deptId = task['departmentId'] ?? task['department']?['id'];
-      if (groupedTasks.containsKey(deptId)) {
-        groupedTasks[deptId]!.add(task);
-      } else {
-        groupedTasks[null]!.add(task);
+    for (final task in _tasks) {
+      // The backend returns each user's own layout, not the task's department.
+      String? groupId = task['personalLayout']?['groupId']?.toString();
+      // A subtask visually follows its parent when that parent is available.
+      if (groupId == null && task['parentTaskId'] != null) {
+        final parent = tasksById[task['parentTaskId']?.toString()];
+        groupId = parent?['personalLayout']?['groupId']?.toString();
       }
+      groupedTasks[groupedTasks.containsKey(groupId) ? groupId : null]!.add(
+        task,
+      );
     }
 
-    final allKeys = [
-      ..._departments.map((d) => d['id'] as String?),
-      null
+    final keys = <String?>[
+      ..._groups.map((group) => group['id'].toString()),
+      null,
     ];
 
     return ListView(
       padding: const EdgeInsets.all(12),
-      children: allKeys.map((deptId) {
-        final deptName = deptId == null 
-            ? 'Ungrouped' 
-            : _departments.firstWhere((d) => d['id'] == deptId, orElse: () => {})['name'] ?? 'Group';
-        
-        final groupTasks = groupedTasks[deptId] ?? [];
-
+      children: keys.map((groupId) {
+        final name = groupId == null
+            ? 'Ungrouped'
+            : _groups
+                  .firstWhere(
+                    (group) => group['id'].toString() == groupId,
+                  )['name']
+                  .toString();
+        final groupTasks = groupedTasks[groupId] ?? <dynamic>[];
         return ExpansionTile(
+          key: PageStorageKey<String>('task-group-${groupId ?? 'ungrouped'}'),
           initiallyExpanded: true,
           title: Text(
-            '$deptName (${groupTasks.length} tasks)',
+            '$name (${groupTasks.length} tasks)',
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
           ),
           children: groupTasks.isEmpty
               ? [
                   const Padding(
                     padding: EdgeInsets.all(12.0),
-                    child: Text('No tasks in this group.', style: TextStyle(color: Colors.grey)),
-                  )
+                    child: Text(
+                      'No tasks in this group.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
                 ]
               : groupTasks.map((task) => _buildTaskCard(task)).toList(),
         );
@@ -161,7 +186,10 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     final description = task['description'] ?? '';
     final status = task['status'] ?? 'OPEN';
     final dueDate = task['dueDate']?.toString().substring(0, 10);
-    final assigneeName = task['assignee']?['displayName'] ?? task['assignee']?['email'] ?? 'Unassigned';
+    final assigneeName =
+        task['assignee']?['displayName'] ??
+        task['assignee']?['email'] ??
+        'Unassigned';
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
@@ -176,7 +204,10 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
                   if (description.isNotEmpty) ...[
                     const SizedBox(height: 4),
@@ -195,7 +226,11 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.person, size: 14, color: Colors.blueGrey),
+                          const Icon(
+                            Icons.person,
+                            size: 14,
+                            color: Colors.blueGrey,
+                          ),
                           const SizedBox(width: 4),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 120),
@@ -211,11 +246,18 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.calendar_today, size: 14, color: Colors.redAccent),
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 14,
+                              color: Colors.redAccent,
+                            ),
                             const SizedBox(width: 4),
                             Text(
                               dueDate,
-                              style: const TextStyle(fontSize: 12, color: Colors.redAccent),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.redAccent,
+                              ),
                             ),
                           ],
                         ),
@@ -225,10 +267,36 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
               ),
             ),
             const SizedBox(width: 8),
-            Chip(
-              label: Text(status, style: const TextStyle(fontSize: 10)),
-              backgroundColor: _getStatusColor(status),
-              visualDensity: VisualDensity.compact,
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Chip(
+                  label: Text(status, style: const TextStyle(fontSize: 10)),
+                  backgroundColor: _getStatusColor(status),
+                  visualDensity: VisualDensity.compact,
+                ),
+                if (task['parentTaskId'] == null)
+                  PopupMenuButton<String>(
+                    tooltip: 'Move to my group',
+                    icon: const Icon(Icons.drive_file_move_outline, size: 20),
+                    onSelected: (value) => _moveTaskToGroup(
+                      task['id'].toString(),
+                      value.isEmpty ? null : value,
+                    ),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem<String>(
+                        value: '',
+                        child: Text('Ungrouped'),
+                      ),
+                      ..._groups.map(
+                        (group) => PopupMenuItem<String>(
+                          value: group['id'].toString(),
+                          child: Text(group['name'].toString()),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
             ),
           ],
         ),
@@ -236,264 +304,98 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     );
   }
 
-  void _showNewGroupDialog() {
-    final TextEditingController nameController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New task group'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(
-            labelText: 'Group name',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              try {
-                await _taskService.createDepartment(name: nameController.text.trim());
-                Navigator.pop(context);
-                _loadData();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('ჯგუფი წარმატებით შეიქმნა')),
-                );
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-                );
-              }
-            },
-            child: const Text('Create group'),
-          ),
-        ],
-      ),
-    );
+  Future<void> _moveTaskToGroup(String taskId, String? groupId) async {
+    try {
+      await _taskService.moveTaskToGroup(taskId, groupId);
+      if (!mounted) return;
+      await _loadData();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    }
   }
 
-  void _showNewTaskBottomSheet() {
-    final TextEditingController titleController = TextEditingController();
-    final TextEditingController descController = TextEditingController();
-    
-    String? selectedAssigneeId;
-    String? selectedDepartmentId;
-    String selectedPriority = 'NORMAL';
-    DateTime? selectedDueDate;
-    List<String> selectedParticipantIds = [];
-    XFile? attachedXFile;
+  Future<void> _showNewGroupDialog() async {
+    // The dialog only returns a value. It never performs an API call.
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const TaskGroupDialog(),
+    );
+    if (!mounted || name == null || _isCreatingGroup) return;
 
-    showModalBottomSheet(
+    setState(() => _isCreatingGroup = true);
+    try {
+      await _taskService.createTaskGroup(name: name);
+      if (!mounted) return;
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ჯგუფი წარმატებით შეიქმნა')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreatingGroup = false);
+    }
+  }
+
+  Future<void> _showNewTaskBottomSheet() async {
+    // The sheet owns its controllers. It only returns an immutable draft.
+    final draft = await showModalBottomSheet<TaskCreationDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16, right: 16, top: 24,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('New task', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(labelText: 'Task title *', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: descController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(labelText: 'Description', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: FutureBuilder<List<dynamic>>(
-                        future: _taskService.getUsers(),
-                        builder: (context, snapshot) {
-                          final users = snapshot.data ?? [];
-                          return DropdownButtonFormField<String>(
-                            value: selectedAssigneeId,
-                            decoration: const InputDecoration(labelText: 'Assigned to', border: OutlineInputBorder()),
-                            items: [
-                              const DropdownMenuItem(value: null, child: Text('Unassigned')),
-                              ...users.map((u) => DropdownMenuItem(
-                                    value: u['id'].toString(),
-                                    child: Text(u['displayName'] ?? u['email'] ?? 'User', overflow: TextOverflow.ellipsis),
-                                  )),
-                            ],
-                            onChanged: (val) => setStateModal(() => selectedAssigneeId = val),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        value: selectedPriority,
-                        decoration: const InputDecoration(labelText: 'Priority', border: OutlineInputBorder()),
-                        items: const [
-                          DropdownMenuItem(value: 'LOW', child: Text('Low')),
-                          DropdownMenuItem(value: 'NORMAL', child: Text('Normal')),
-                          DropdownMenuItem(value: 'HIGH', child: Text('High')),
-                          DropdownMenuItem(value: 'URGENT', child: Text('Urgent')),
-                        ],
-                        onChanged: (val) => setStateModal(() => selectedPriority = val!),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-
-                DropdownButtonFormField<String>(
-                  value: selectedDepartmentId,
-                  decoration: const InputDecoration(labelText: 'Group', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('Ungrouped')),
-                    ..._departments.map((d) => DropdownMenuItem(
-                          value: d['id'].toString(),
-                          child: Text(d['name']),
-                        )),
-                  ],
-                  onChanged: (val) => setStateModal(() => selectedDepartmentId = val),
-                ),
-                const SizedBox(height: 12),
-
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.calendar_today),
-                  label: Text(selectedDueDate == null ? 'Select Due Date' : selectedDueDate.toString().substring(0, 10)),
-                  onPressed: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime(2030),
-                    );
-                    if (date != null) setStateModal(() => selectedDueDate = date);
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                const Text('Participants *', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Container(
-                  height: 120,
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(4)),
-                  child: FutureBuilder<List<dynamic>>(
-                    future: _taskService.getUsers(),
-                    builder: (context, snapshot) {
-                      final users = snapshot.data ?? [];
-                      if (users.isEmpty) return const Center(child: CircularProgressIndicator());
-                      return ListView.builder(
-                        itemCount: users.length,
-                        itemBuilder: (context, index) {
-                          final user = users[index];
-                          final userId = user['id'].toString();
-                          final isSelected = selectedParticipantIds.contains(userId);
-                          return CheckboxListTile(
-                            title: Text(user['displayName'] ?? user['email']),
-                            value: isSelected,
-                            onChanged: (checked) {
-                              setStateModal(() {
-                                if (checked == true) {
-                                  selectedParticipantIds.add(userId);
-                                } else {
-                                  selectedParticipantIds.remove(userId);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.attach_file),
-                  label: Text(attachedXFile == null ? 'Choose File' : attachedXFile!.name),
-                  onPressed: () async {
-                    final XFile? pickedFile = await openFile();
-                    if (pickedFile != null) {
-                      setStateModal(() => attachedXFile = pickedFile);
-                    }
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (titleController.text.trim().isEmpty || selectedParticipantIds.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('გთხოვთ შეავსოთ სათაური და აირჩიოთ მინიმუმ ერთი მონაწილე!'), backgroundColor: Colors.red),
-                          );
-                          return;
-                        }
-
-                        try {
-                          List<String> attachmentIds = [];
-                          if (attachedXFile != null) {
-                            final bytes = await attachedXFile!.readAsBytes();
-                            final fileId = await _taskService.uploadFileBytes(bytes, attachedXFile!.name);
-                            if (fileId != null) attachmentIds.add(fileId);
-                          }
-
-                          await _taskService.createTask(
-                            title: titleController.text.trim(),
-                            description: descController.text.trim(),
-                            assigneeId: selectedAssigneeId,
-                            departmentId: selectedDepartmentId,
-                            priority: selectedPriority,
-                            dueDate: selectedDueDate?.toIso8601String(),
-                            participantIds: selectedParticipantIds,
-                            attachmentIds: attachmentIds,
-                          );
-
-                          Navigator.pop(context);
-                          _loadData();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('დავალება წარმატებით შეიქმნა!'), backgroundColor: Colors.green),
-                          );
-                        } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-                          );
-                        }
-                      },
-                      child: const Text('Save task'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
-        ),
-      ),
+      useSafeArea: true,
+      builder: (_) => TaskCreateSheet(service: _taskService, groups: _groups),
     );
+    if (!mounted || draft == null || _isCreatingTask) return;
+    setState(() => _isCreatingTask = true);
+
+    try {
+      final attachmentIds = <String>[];
+      if (draft.attachment != null) {
+        final bytes = await draft.attachment!.readAsBytes();
+        if (!mounted) return;
+        final fileId = await _taskService.uploadFileBytes(
+          bytes,
+          draft.attachment!.name,
+        );
+        if (!mounted) return;
+        if (fileId == null) throw Exception('ფაილის ატვირთვა ვერ მოხერხდა');
+        attachmentIds.add(fileId);
+      }
+
+      await _taskService.createTask(
+        title: draft.title,
+        description: draft.description,
+        assigneeId: draft.assigneeId,
+        groupId: draft.groupId,
+        priority: draft.priority,
+        dueDate: draft.dueDate,
+        participantIds: draft.participantIds,
+        attachmentIds: attachmentIds,
+      );
+      if (!mounted) return;
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('დავალება წარმატებით შეიქმნა!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString()), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _isCreatingTask = false);
+    }
   }
 
   Color _getStatusColor(String? status) {

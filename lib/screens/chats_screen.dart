@@ -20,9 +20,40 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
-  static const Color _ink = Color(0xFF151F36);
-  static const Color _muted = Color(0xFF8998B2);
-  static const Color _page = Color(0xFFEDF2FE);
+  // Keep the approved Stitch light palette; switch to a high-contrast dark
+  // palette whenever the app's MaterialApp ThemeMode changes.
+  bool get _isDark =>
+      Theme.of(context).colorScheme.brightness == Brightness.dark;
+
+  Color get _ink =>
+      _isDark ? const Color(0xFFF4F7FF) : const Color(0xFF151F36);
+  Color get _muted =>
+      _isDark ? const Color(0xFF9DADC7) : const Color(0xFF8998B2);
+  Color get _page =>
+      _isDark ? const Color(0xFF101827) : const Color(0xFFEDF2FE);
+  Color get _surface =>
+      _isDark ? const Color(0xFF192437) : const Color(0xFFFAFCFF);
+  Color get _card =>
+      _isDark ? const Color(0xFF243149) : const Color(0xFFFEFEFF);
+  Color get _cardBorder =>
+      _isDark ? const Color(0xFF32415A) : const Color(0xFFF2F5FB);
+  Color get _searchBackground =>
+      _isDark ? const Color(0xFF202C41) : const Color(0xFFFCFDFE);
+  Color get _secondaryText =>
+      _isDark ? const Color(0xFFAABAD3) : const Color(0xFF687995);
+  Color get _previewText =>
+      _isDark ? const Color(0xFFB2C0D6) : const Color(0xFF8392A9);
+  Color get _hintColor =>
+      _isDark ? const Color(0xFF95A6C0) : const Color(0xFFA2AEC1);
+  Color get _searchIconColor =>
+      _isDark ? const Color(0xFF98AAC7) : const Color(0xFFB3C0D5);
+  Color get _linkColor => _isDark ? const Color(0xFF84B0FF) : _blue;
+  Color get _cardShadow => _isDark
+      ? Colors.black.withValues(alpha: 0.18)
+      : const Color(0xFF53657F).withValues(alpha: 0.045);
+  Color get _surfaceShadow => _isDark
+      ? Colors.black.withValues(alpha: 0.24)
+      : const Color(0xFF7183A3).withValues(alpha: 0.09);
   static const Color _blue = Color(0xFF2465EE);
 
   final ChatService _chatService = ChatService();
@@ -216,79 +247,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }).toList();
   }
 
-  Widget _buildWorkspaceHeader() {
-    return Container(
-      height: 76,
-      padding: const EdgeInsets.symmetric(horizontal: 22),
-      decoration: const BoxDecoration(
-        color: Color(0xFFF4F7FF),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE9EEFA), width: 1),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: _blue,
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFD1E0FF), width: 3),
-              boxShadow: [
-                BoxShadow(
-                  color: _blue.withValues(alpha: 0.20),
-                  blurRadius: 7,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 9),
-          const Expanded(
-            child: Text(
-              'Workspace',
-              style: TextStyle(
-                color: _ink,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Messages menu',
-            onSelected: (action) {
-              if (action == 'refresh') _loadData();
-              if (action == 'new') _showNewConversationDialog();
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: 'refresh', child: Text('Refresh')),
-              PopupMenuItem(
-                value: 'new',
-                child: Text('New conversation'),
-              ),
-            ],
-            child: Container(
-              width: 37,
-              height: 37,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.65),
-                borderRadius: BorderRadius.circular(13),
-                border: Border.all(color: Colors.white),
-              ),
-              child: const Icon(
-                Icons.menu_rounded,
-                color: Color(0xFF52647F),
-                size: 19,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSectionHeader() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 19, 20, 18),
@@ -298,7 +256,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Messages',
                   style: TextStyle(
                     color: _ink,
@@ -311,8 +269,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 const SizedBox(height: 4),
                 Text(
                   _chats.length.toString() + ' active conversations',
-                  style: const TextStyle(
-                    color: Color(0xFF687995),
+                  style: TextStyle(
+                    color: _secondaryText,
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
                   ),
@@ -371,29 +329,29 @@ class _ChatsScreenState extends State<ChatsScreen> {
     return Container(
       height: 48,
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFDFE),
+        color: _searchBackground,
         borderRadius: BorderRadius.circular(16),
       ),
       child: TextField(
         controller: _searchController,
         onChanged: (value) => setState(() => _query = value),
         textInputAction: TextInputAction.search,
-        style: const TextStyle(
+        style: TextStyle(
           color: _ink,
           fontSize: 13,
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
           hintText: 'Find a conversation',
-          hintStyle: const TextStyle(
-            color: Color(0xFFA2AEC1),
+          hintStyle: TextStyle(
+            color: _hintColor,
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
-          prefixIcon: const Icon(
+          prefixIcon: Icon(
             Icons.search_rounded,
             size: 20,
-            color: Color(0xFFB3C0D5),
+            color: _searchIconColor,
           ),
           suffixIcon: _query.isNotEmpty
               ? IconButton(
@@ -442,12 +400,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
         child: Ink(
           padding: const EdgeInsets.fromLTRB(11, 11, 11, 11),
           decoration: BoxDecoration(
-            color: const Color(0xFFFEFEFF),
+            color: _card,
             borderRadius: BorderRadius.circular(17),
-            border: Border.all(color: const Color(0xFFF2F5FB)),
+            border: Border.all(color: _cardBorder),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF53657F).withValues(alpha: 0.045),
+                color: _cardShadow,
                 blurRadius: 16,
                 offset: const Offset(0, 5),
               ),
@@ -496,7 +454,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFF15C795),
                           shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
+                          border: Border.all(color: _card, width: 2),
                         ),
                       ),
                     ),
@@ -527,7 +485,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         const SizedBox(width: 5),
                         Text(
                           _dateLabel(chat),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: _muted,
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -545,8 +503,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: hasMessages
-                                  ? const Color(0xFF8392A9)
-                                  : _blue,
+                                  ? _previewText
+                                  : _linkColor,
                               fontSize: 11,
                               fontWeight: hasMessages
                                   ? FontWeight.w400
@@ -600,7 +558,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wifi_off_rounded, color: _muted, size: 30),
+              Icon(Icons.wifi_off_rounded, color: _muted, size: 30),
               const SizedBox(height: 12),
               Text(
                 _errorMessage!,
@@ -628,7 +586,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     _query.isNotEmpty
                         ? 'No matching conversations'
                         : 'No conversations yet',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: _muted,
                       fontSize: 13,
                     ),
@@ -656,18 +614,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _buildWorkspaceHeader(),
             _buildSectionHeader(),
             Expanded(
               child: Container(
                 margin: const EdgeInsets.fromLTRB(15, 0, 15, 12),
                 padding: const EdgeInsets.fromLTRB(13, 14, 13, 0),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFAFCFF),
+                  color: _surface,
                   borderRadius: BorderRadius.circular(23),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF7183A3).withValues(alpha: 0.09),
+                      color: _surfaceShadow,
                       blurRadius: 22,
                       offset: const Offset(0, 7),
                     ),

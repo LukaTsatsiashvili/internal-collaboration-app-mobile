@@ -11,6 +11,7 @@ import '../features/chat/data/chat_service.dart';
 import '../features/auth/data/auth_service.dart';
 import '../core/network/api_client.dart';
 
+// Stitch-inspired messages list. The chat detail, dialog, and networking stay unchanged.
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
 
@@ -19,11 +20,19 @@ class ChatsScreen extends StatefulWidget {
 }
 
 class _ChatsScreenState extends State<ChatsScreen> {
+  static const Color _ink = Color(0xFF151F36);
+  static const Color _muted = Color(0xFF8998B2);
+  static const Color _page = Color(0xFFEDF2FE);
+  static const Color _blue = Color(0xFF2465EE);
+
   final ChatService _chatService = ChatService();
+  final TextEditingController _searchController = TextEditingController();
+
   bool _isLoading = true;
   List<dynamic> _chats = [];
   String? _errorMessage;
   String? _currentUserId;
+  String _query = '';
 
   @override
   void initState() {
@@ -31,33 +40,42 @@ class _ChatsScreenState extends State<ChatsScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  // Preserve the existing user/conversation API and its ordering.
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      // 1. მიმდინარე მომხმარებლის ID-ის წამოღება პირად ჩატებში სახელის სწორად გამოსაჩენად
       final profileResponse = await ApiClient().dio.get('/auth/me');
       if (profileResponse.statusCode == 200 &&
           profileResponse.data['success'] == true) {
         _currentUserId = profileResponse.data['data']['id'];
       }
-
-      // 2. ჩათების სიის წამოღება
       final chats = await _chatService.getConversations();
+      if (!mounted) return;
       setState(() {
         _chats = chats;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -66,105 +84,606 @@ class _ChatsScreenState extends State<ChatsScreen> {
       context: context,
       builder: (context) => const NewConversationDialog(),
     ).then((created) {
-      if (created == true) {
+      if (created == true && mounted) {
         _loadData();
       }
     });
   }
 
+  dynamic _otherUser(dynamic conversation) {
+    if (conversation['type'] != 'DIRECT') return null;
+    final members = conversation['members'];
+    if (members is! List) return null;
+    for (final member in members) {
+      if (member is Map &&
+          member['user'] is Map &&
+          member['userId'] != _currentUserId) {
+        return member['user'];
+      }
+    }
+    return null;
+  }
+
+  String _conversationName(dynamic conversation) {
+    String name = (conversation['name'] ??
+            conversation['title'] ??
+            'კორპორატიული ჩათი')
+        .toString();
+    final user = _otherUser(conversation);
+    if (user != null) {
+      name = (user['displayName'] ?? user['email'] ?? 'პირადი ჩათი')
+          .toString();
+    }
+    return name;
+  }
+
+  dynamic _lastMessage(dynamic conversation) {
+    final supplied = conversation['lastMessage'];
+    if (supplied is Map) return supplied;
+    final messages = conversation['messages'];
+    // The API returns newest first (one item). Do not reverse its order.
+    if (messages is List && messages.isNotEmpty && messages.first is Map) {
+      return messages.first;
+    }
+    return null;
+  }
+
+  String _conversationPreview(dynamic conversation) {
+    final message = _lastMessage(conversation);
+    if (message == null) return 'Start a conversation →';
+    final content = (message['content'] ?? '').toString();
+    return content.trim().isEmpty ? 'Attachment' : content;
+  }
+
+  String _dateLabel(dynamic conversation) {
+    final value = _lastMessage(conversation)?['createdAt'] ??
+        conversation['updatedAt'];
+    if (value is! String) return '';
+    final timestamp = DateTime.tryParse(value)?.toLocal();
+    if (timestamp == null) return '';
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date = DateTime(timestamp.year, timestamp.month, timestamp.day);
+    final difference = today.difference(date).inDays;
+    if (difference == 0) {
+      final hour = timestamp.hour % 12 == 0 ? 12 : timestamp.hour % 12;
+      final minute = timestamp.minute.toString().padLeft(2, '0');
+      return hour.toString() +
+          ':' +
+          minute +
+          (timestamp.hour >= 12 ? ' PM' : ' AM');
+    }
+    if (difference == 1) return 'Yesterday';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final label = months[timestamp.month - 1] +
+        ' ' +
+        timestamp.day.toString();
+    return timestamp.year == now.year
+        ? label
+        : label + ', ' + timestamp.year.toString();
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length > 1 && parts.first.isNotEmpty && parts.last.isNotEmpty) {
+      return (parts.first[0] + parts.last[0]).toUpperCase();
+    }
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return '?';
+    return trimmed.substring(0, trimmed.length >= 2 ? 2 : 1).toUpperCase();
+  }
+
+  List<Color> _avatarColors(String seed) {
+    const palette = [
+      [Color(0xFF6688FA), Color(0xFF365BEF)],
+      [Color(0xFFC85CF5), Color(0xFF8735E7)],
+      [Color(0xFF32CFB1), Color(0xFF0EB49E)],
+      [Color(0xFF718096), Color(0xFF414F64)],
+      [Color(0xFF9DACE7), Color(0xFF778AD8)],
+      [Color(0xFFF1A66B), Color(0xFFE57861)],
+    ];
+    final index = seed.codeUnits.fold<int>(0, (sum, code) => sum + code) %
+        palette.length;
+    return palette[index];
+  }
+
+  bool _recentlyActive(dynamic conversation) {
+    final user = _otherUser(conversation);
+    final value = user == null ? null : user['lastSeenAt'];
+    if (value is! String) return false;
+    final seen = DateTime.tryParse(value);
+    if (seen == null) return false;
+    final age = DateTime.now().difference(seen);
+    return !age.isNegative && age.inMinutes < 5;
+  }
+
+  int _unreadCount(dynamic conversation) {
+    final value = conversation['unreadCount'];
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  List<dynamic> get _visibleChats {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) return _chats;
+    return _chats.where((chat) {
+      return _conversationName(chat).toLowerCase().contains(query) ||
+          _conversationPreview(chat).toLowerCase().contains(query);
+    }).toList();
+  }
+
+  Widget _buildWorkspaceHeader() {
+    return Container(
+      height: 76,
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF4F7FF),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE9EEFA), width: 1),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: _blue,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFD1E0FF), width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: _blue.withValues(alpha: 0.20),
+                  blurRadius: 7,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 9),
+          const Expanded(
+            child: Text(
+              'Workspace',
+              style: TextStyle(
+                color: _ink,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          PopupMenuButton<String>(
+            tooltip: 'Messages menu',
+            onSelected: (action) {
+              if (action == 'refresh') _loadData();
+              if (action == 'new') _showNewConversationDialog();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'refresh', child: Text('Refresh')),
+              PopupMenuItem(
+                value: 'new',
+                child: Text('New conversation'),
+              ),
+            ],
+            child: Container(
+              width: 37,
+              height: 37,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.65),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: Colors.white),
+              ),
+              child: const Icon(
+                Icons.menu_rounded,
+                color: Color(0xFF52647F),
+                size: 19,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 19, 20, 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Messages',
+                  style: TextStyle(
+                    color: _ink,
+                    fontSize: 23,
+                    fontWeight: FontWeight.w800,
+                    height: 1.2,
+                    letterSpacing: -0.85,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _chats.length.toString() + ' active conversations',
+                  style: const TextStyle(
+                    color: Color(0xFF687995),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _showNewConversationDialog,
+              borderRadius: BorderRadius.circular(24),
+              child: Ink(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2369F1), Color(0xFF4F43EB)],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _blue.withValues(alpha: 0.21),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 14, color: Colors.white),
+                      SizedBox(width: 5),
+                      Text(
+                        'New conversation',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.15,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      height: 48,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFDFE),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (value) => setState(() => _query = value),
+        textInputAction: TextInputAction.search,
+        style: const TextStyle(
+          color: _ink,
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Find a conversation',
+          hintStyle: const TextStyle(
+            color: Color(0xFFA2AEC1),
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
+          prefixIcon: const Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: Color(0xFFB3C0D5),
+          ),
+          suffixIcon: _query.isNotEmpty
+              ? IconButton(
+                  tooltip: 'Clear search',
+                  icon: const Icon(Icons.close_rounded, size: 17),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() => _query = '');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationCard(dynamic chat) {
+    final name = _conversationName(chat);
+    final preview = _conversationPreview(chat);
+    final hasMessages = _lastMessage(chat) != null;
+    final colors = _avatarColors(name);
+    final unread = _unreadCount(chat);
+    final active = _recentlyActive(chat);
+    final conversationId = (chat['id'] ?? '').toString();
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(17),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ChatDetailScreen(
+                conversationId: conversationId,
+                chatName: name,
+              ),
+            ),
+          ).then((_) {
+            if (mounted) _loadData();
+          });
+        },
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(11, 11, 11, 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEFEFF),
+            borderRadius: BorderRadius.circular(17),
+            border: Border.all(color: const Color(0xFFF2F5FB)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF53657F).withValues(alpha: 0.045),
+                blurRadius: 16,
+                offset: const Offset(0, 5),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: colors,
+                      ),
+                      borderRadius: BorderRadius.circular(13),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colors.last.withValues(alpha: 0.13),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      _initials(name),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  if (active)
+                    Positioned(
+                      right: -2,
+                      bottom: -2,
+                      child: Container(
+                        height: 11,
+                        width: 11,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF15C795),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _ink,
+                              fontSize: 12.5,
+                              fontWeight:
+                                  unread > 0 ? FontWeight.w800 : FontWeight.w700,
+                              letterSpacing: -0.17,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          _dateLabel(chat),
+                          style: const TextStyle(
+                            color: _muted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: hasMessages
+                                  ? const Color(0xFF8392A9)
+                                  : _blue,
+                              fontSize: 11,
+                              fontWeight: hasMessages
+                                  ? FontWeight.w400
+                                  : FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (unread > 0) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 19),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 5,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _blue,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              unread > 99 ? '99+' : unread.toString(),
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConversationList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: _blue));
+    }
+    if (_errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.wifi_off_rounded, color: _muted, size: 30),
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Color(0xFFB83C52)),
+              ),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final visible = _visibleChats;
+    return RefreshIndicator(
+      color: _blue,
+      onRefresh: _loadData,
+      child: visible.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                const SizedBox(height: 60),
+                Center(
+                  child: Text(
+                    _query.isNotEmpty
+                        ? 'No matching conversations'
+                        : 'No conversations yet',
+                    style: const TextStyle(
+                      color: _muted,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : ListView.separated(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(top: 2, bottom: 15),
+              itemCount: visible.length,
+              separatorBuilder: (context, index) =>
+                  const SizedBox(height: 9),
+              itemBuilder: (context, index) =>
+                  _buildConversationCard(visible[index]),
+            ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('ჩათები და არხები')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage != null
-          ? Center(
-              child: Text(
-                _errorMessage!,
-                style: const TextStyle(color: Colors.red),
-              ),
-            )
-          : _chats.isEmpty
-          ? const Center(child: Text('ჩათები არ მოიძებნა'))
-          : RefreshIndicator(
-              onRefresh: _loadData,
-              child: ListView.builder(
-                itemCount: _chats.length,
-                itemBuilder: (context, index) {
-                  final chat = _chats[index];
-                  final chatType = chat['type'];
-                  final conversationId = chat['id'] ?? '';
-
-                  // 3. საუბრის სახელის სწორი გარჩევა (DIRECT vs GROUP)
-                  String chatName =
-                      chat['name'] ?? chat['title'] ?? 'კორპორატიული ჩათი';
-                  if (chatType == 'DIRECT' && chat['members'] != null) {
-                    final members = chat['members'] as List<dynamic>;
-                    final otherMember = members.firstWhere(
-                      (m) => m['userId'] != _currentUserId && m['user'] != null,
-                      orElse: () => null,
-                    );
-                    if (otherMember != null && otherMember['user'] != null) {
-                      final user = otherMember['user'];
-                      chatName =
-                          user['displayName'] ?? user['email'] ?? 'პირადი ჩათი';
-                    }
-                  }
-
-                  // 4. ბოლო შეტყობინების ამოღება
-                  String lastMsg = 'შეტყობინება არ არის';
-                  
-                  final lastMessageObj = chat['lastMessage'] ?? 
-                      (chat['messages'] != null && (chat['messages'] as List).isNotEmpty ? chat['messages'].last : null);
-
-                  if (lastMessageObj != null) {
-                    final content = lastMessageObj['content'] ?? '';
-
-                    if (content.trim().isNotEmpty) {
-                      // თუ ტექსტი არსებობს, ვწერთ ტექსტს
-                      lastMsg = content;
-                    } else {
-                      // თუ ტექსტი ცარიელია (რაც ფაილის შემთხვევაშია), ვწერთ Attachment-ს
-                      lastMsg = 'Attachment';
-                    }
-                  }
-
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.blue.shade100,
-                      child: Icon(
-                        chatType == 'GROUP' ? Icons.group : Icons.person,
-                        color: Colors.blue.shade800,
-                      ),
+      backgroundColor: _page,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildWorkspaceHeader(),
+            _buildSectionHeader(),
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(15, 0, 15, 12),
+                padding: const EdgeInsets.fromLTRB(13, 14, 13, 0),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFAFCFF),
+                  borderRadius: BorderRadius.circular(23),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF7183A3).withValues(alpha: 0.09),
+                      blurRadius: 22,
+                      offset: const Offset(0, 7),
                     ),
-                    title: Text(
-                      chatName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Text(
-                      lastMsg,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatDetailScreen(
-                            conversationId: conversationId,
-                            chatName: chatName,
-                          ),
-                        ),
-                      ).then((_) => _loadData());
-                    },
-                  );
-                },
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildSearchField(),
+                    const SizedBox(height: 15),
+                    Expanded(child: _buildConversationList()),
+                  ],
+                ),
               ),
             ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showNewConversationDialog,
-        child: const Icon(Icons.chat),
+          ],
+        ),
       ),
     );
   }

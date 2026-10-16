@@ -165,7 +165,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
     }).toList();
   }
 
-  Widget _fieldLabel(String text, {bool required = false, String? suffix}) {
+  Widget _fieldLabel(String text, {bool isRequired = false, String? suffix}) {
     final p = _p;
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
@@ -180,7 +180,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
               letterSpacing: 0.65,
             ),
           ),
-          if (required)
+          if (isRequired)
             const Text(
               ' *',
               style: TextStyle(
@@ -248,8 +248,8 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
           valueListenable: _title,
           builder: (context, value, child) => _fieldLabel(
             'TASK TITLE',
-            required: true,
-            suffix: value.text.characters.length.toString() + '/250',
+            isRequired: true,
+            suffix: value.text.length.toString() + '/250',
           ),
         ),
         TextField(
@@ -258,7 +258,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
           buildCounter: (context, {
             required int currentLength,
             required bool isFocused,
-            int? maxLength,
+            required int? maxLength,
           }) => null,
           onChanged: (_) {
             if (_error != null) setState(() => _error = null);

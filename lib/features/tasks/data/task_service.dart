@@ -80,15 +80,24 @@ class TaskService {
   }
 
   // Changing a personal layout never changes the task's department.
-  Future<void> moveTaskToGroup(String taskId, String? groupId) async {
+  Future<Map<String, dynamic>> moveTaskToGroup(
+    String taskId, String? groupId,
+  ) async {
     try {
       final response = await _apiClient.dio.put(
         '/tasks/$taskId/layout',
         data: {'groupId': groupId},
       );
-      if (response.data['success'] != true) {
+      if (response.data['success'] != true ||
+          response.data['data'] is! Map) {
         throw Exception('დავალების ჯგუფის შეცვლა ვერ მოხერხდა');
       }
+      final saved = Map<String, dynamic>.from(response.data['data'] as Map);
+      // Never present a group as saved until the server confirms its ID.
+      if (saved['groupId']?.toString() != groupId) {
+        throw Exception('სერვერმა არჩეული ჯგუფი ვერ დაადასტურა');
+      }
+      return saved;
     } on DioException catch (e) {
       throw Exception(
         e.response?.data?['error']?['message'] ??
@@ -115,22 +124,36 @@ class TaskService {
 
   // 5. ფაილის ატვირთვა პლატფორმისთვის ნაცნობი მეთოდით
   Future<String?> uploadFileBytes(List<int> bytes, String fileName) async {
+    if (bytes.isEmpty) throw Exception('ცარიელი ფაილის ატვირთვა შეუძლებელია');
     try {
       final formData = FormData.fromMap({
         'file': MultipartFile.fromBytes(bytes, filename: fileName),
       });
 
-      final response = await _apiClient.dio.post('/files', data: formData);
+      // Explicit multipart body: ApiClient defaults to application/json.
+      final response = await _apiClient.dio.post(
+        '/files',
+        data: formData,
+        options: Options(
+          contentType: Headers.multipartFormDataContentType,
+          sendTimeout: const Duration(minutes: 2),
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
       if ((response.statusCode == 200 || response.statusCode == 201) &&
-          response.data['success'] == true) {
-        return response.data['data']['id'];
+          response.data['success'] == true &&
+          response.data['data']?['id'] != null) {
+        return response.data['data']['id'].toString();
       }
+      throw Exception('სერვერმა ატვირთვა ვერ დაადასტურა');
     } on DioException catch (e) {
+      final payload = e.response?.data;
+      final error = payload is Map ? payload['error'] : null;
       throw Exception(
-        e.response?.data['error']['message'] ?? 'ფაილის ატვირთვა ვერ მოხერხდა',
+        (error is Map ? error['message'] : null)?.toString() ??
+            'ფაილის ატვირთვა ვერ მოხერხდა: ' + (e.message ?? 'network error'),
       );
     }
-    return null;
   }
 
   // 6. ახალი დავალების შექმნა
@@ -189,6 +212,22 @@ class TaskService {
       'content': content.trim(),
       'attachmentIds': attachmentIds,
     });
+  }
+
+  // Task attachment update is separate from adding an attachment to a
+  // comment. Preserve existing attachment IDs when appending a new file.
+  Future<void> attachFileToTask(
+    String taskId, {
+    required List<String> existingIds,
+    required String newFileId,
+  }) async {
+    final allIds = {...existingIds, newFileId}.toList();
+    final response = await _apiClient.dio.patch('/tasks/$taskId', data: {
+      'attachmentIds': allIds,
+    });
+    if (response.data['success'] != true) {
+      throw Exception('ფაილის დავალებასთან დაკავშირება ვერ მოხერხდა');
+    }
   }
 
   // Authenticated Dio client uses the same token and refresh interceptor as

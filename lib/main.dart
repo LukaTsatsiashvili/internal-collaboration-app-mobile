@@ -7,9 +7,10 @@ import 'features/auth/data/presentation/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Hide Android system navigation/status chrome, while still permitting a
-  // temporary swipe to reveal the system controls.
-  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // Keep the phone's top status indicators visible, but hide its bottom
+  // Android navigation bar to give the Flutter app more usable space.
+  await SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual, overlays: [SystemUiOverlay.top]);
   runApp(const InternalCollaborationApp());
 }
 
@@ -55,7 +56,8 @@ class _InternalCollaborationAppState extends State<InternalCollaborationApp>
   }
 
   void _restoreImmersiveMode() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual, overlays: [SystemUiOverlay.top]);
   }
 
   ThemeMode _themeMode = ThemeMode.dark;

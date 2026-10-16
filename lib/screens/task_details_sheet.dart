@@ -181,6 +181,8 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
       setState(() {
         _task = updatedTask;
         _changed = true;
+        // Make the new activity entry discoverable after moving a task.
+        _activityExpanded = true;
       });
       // Refresh history and other server-backed task fields.
       await _load(showSpinner: false);

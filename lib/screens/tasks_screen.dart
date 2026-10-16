@@ -5,6 +5,7 @@ import '../core/theme/app_theme_extensions.dart';
 import 'task_group_dialog.dart';
 import 'task_create_sheet.dart';
 import 'task_filter_dialog.dart';
+import 'task_details_sheet.dart';
 import 'task_advanced_filters.dart';
 
 import '../features/tasks/data/task_service.dart';
@@ -735,6 +736,28 @@ class _TasksScreenState extends State<TasksScreen> {
     )),
   );
 
+  Future<void> _openTaskDetails(dynamic task) async {
+    final id = task['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      clipBehavior: Clip.none,
+      builder: (_) => TaskDetailsSheet(
+        taskId: id,
+        service: _taskService,
+        groups: _groups,
+      ),
+    );
+    // Refresh even after a system-back dismissal; the sheet may already
+    // have saved status, layout, or comments on the backend.
+    if (!mounted) return;
+    await _loadData();
+  }
+
   Widget _buildTaskCard(dynamic task) {
     final p = _p;
     final title = (task['title'] ?? '').toString();
@@ -759,7 +782,10 @@ class _TasksScreenState extends State<TasksScreen> {
     final priorityText = priority.isEmpty ? 'Normal'
         : priority.substring(0, 1) + priority.substring(1).toLowerCase();
 
-    return Container(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _openTaskDetails(task),
+      child: Container(
       margin: const EdgeInsets.fromLTRB(2, 0, 2, 10),
       padding: const EdgeInsets.fromLTRB(13, 13, 13, 12),
       decoration: _panel(),
@@ -860,6 +886,7 @@ class _TasksScreenState extends State<TasksScreen> {
           ],
         ]),
       ]),
+      ),
     );
   }
 

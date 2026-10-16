@@ -1,10 +1,15 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
 
 import 'features/auth/data/presentation/splash_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Hide Android system navigation/status chrome, while still permitting a
+  // temporary swipe to reveal the system controls.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(const InternalCollaborationApp());
 }
 
@@ -16,7 +21,43 @@ class InternalCollaborationApp extends StatefulWidget {
       _InternalCollaborationAppState();
 }
 
-class _InternalCollaborationAppState extends State<InternalCollaborationApp> {
+class _InternalCollaborationAppState extends State<InternalCollaborationApp>
+    with WidgetsBindingObserver {
+  bool _keyboardWasVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _restoreImmersiveMode();
+  }
+
+  @override
+  void didChangeMetrics() {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    final keyboardVisible = views.any((view) => view.viewInsets.bottom > 0);
+    if (_keyboardWasVisible && !keyboardVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _restoreImmersiveMode();
+      });
+    }
+    _keyboardWasVisible = keyboardVisible;
+  }
+
+  void _restoreImmersiveMode() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
   ThemeMode _themeMode = ThemeMode.dark;
   String _currentLanguage = 'ka';
 

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../features/approvals/data/approval_service.dart';
 
 class ApprovalsScreen extends StatefulWidget {
-  const ApprovalsScreen({super.key});
+  const ApprovalsScreen({super.key, this.focusRequestId});
+
+  /// Optional request ID supplied by the notification deep link.
+  final String? focusRequestId;
 
   @override
   State<ApprovalsScreen> createState() => _ApprovalsScreenState();
@@ -14,6 +17,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   bool _isLoading = true;
   List<dynamic> _requests = [];
   String? _errorMessage;
+  bool _focusedOpened = false;
 
   @override
   void initState() {
@@ -29,9 +33,21 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
     try {
       final requests = await _approvalService.getApprovalRequests();
+      if (!mounted) return;
       setState(() {
         _requests = requests;
       });
+      if (widget.focusRequestId != null && !_focusedOpened) {
+        for (final request in requests) {
+          if (request is Map && request['id']?.toString() == widget.focusRequestId) {
+            _focusedOpened = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showFocusedRequest(request);
+            });
+            break;
+          }
+        }
+      }
     } catch (e) {
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
@@ -41,6 +57,40 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _showFocusedRequest(dynamic request) {
+    final steps = request['steps'] is List ? request['steps'] as List : <dynamic>[];
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text((request['title'] ?? 'მოთხოვნა').toString()),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('სტატუსი: ${request['status'] ?? '-'}'),
+              const SizedBox(height: 12),
+              for (final step in steps)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text(
+                    '${step is Map ? (step['name'] ?? 'Step') : 'Step'}: '
+                    '${step is Map ? (step['status'] ?? '-') : '-'}',
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('დახურვა'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleActionDialog(String requestId, String title) {

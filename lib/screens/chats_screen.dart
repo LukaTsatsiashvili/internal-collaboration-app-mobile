@@ -1631,6 +1631,7 @@ class NewConversationDialog extends StatefulWidget {
 class _NewConversationDialogState extends State<NewConversationDialog> {
   final ChatService _chatService = ChatService();
   final TextEditingController _groupNameController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
 
   bool _isGroup = false;
   bool _isLoadingUsers = true;
@@ -1639,6 +1640,7 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
 
   String? _selectedUserId;
   final List<String> _selectedUserIds = [];
+  String _memberQuery = '';
 
   @override
   void initState() {
@@ -1656,6 +1658,13 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
     } catch (_) {
       setState(() => _isLoadingUsers = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _groupNameController.dispose();
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _startConversation() async {
@@ -1735,153 +1744,514 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('New conversation', style: TextStyle(fontSize: 18)),
-          IconButton(
-            icon: const Icon(Icons.close, size: 20),
-            onPressed: () => Navigator.pop(context),
+  AppPalette get _colors => Theme.of(context).extension<AppPalette>()!;
+
+  String _name(dynamic user) {
+    final first = (user['firstName'] ?? '').toString().trim();
+    final last = (user['lastName'] ?? '').toString().trim();
+    final full = [first, last].where((s) => s.isNotEmpty).join(' ');
+    final display = (user['displayName'] ?? '').toString().trim();
+    return full.isNotEmpty
+        ? full
+        : display.isNotEmpty
+            ? display
+            : (user['email'] ?? '').toString();
+  }
+
+  String _subtitle(dynamic user) {
+    final department = user['department'];
+    final departmentName = department is Map
+        ? (department['name'] ?? '').toString().trim()
+        : '';
+    final number = (user['employeeNumber'] ?? '').toString().trim();
+    if (departmentName.isNotEmpty && number.isNotEmpty) {
+      return 'Store #$number · $departmentName';
+    }
+    if (departmentName.isNotEmpty) return departmentName;
+    final job = (user['jobTitle'] ?? '').toString().trim();
+    return job.isNotEmpty ? job : (user['email'] ?? '').toString();
+  }
+
+  List<dynamic> get _visibleMembers {
+    final query = _memberQuery.toLowerCase().trim();
+    if (query.isEmpty) return _users;
+    return _users.where((user) {
+      return _name(user).toLowerCase().contains(query) ||
+          _subtitle(user).toLowerCase().contains(query) ||
+          (user['email'] ?? '').toString().toLowerCase().contains(query);
+    }).toList();
+  }
+
+  Widget _label(String title) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: _colors.secondaryText,
+            fontSize: 10,
+            letterSpacing: 0.7,
+            fontWeight: FontWeight.w800,
           ),
-        ],
+        ),
+      );
+
+  InputDecoration _field(String hint, {Widget? prefixIcon, Widget? suffixIcon}) {
+    final p = _colors;
+    final outline = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: p.cardBorder),
+    );
+    return InputDecoration(
+      filled: true,
+      fillColor: p.card,
+      hintText: hint,
+      hintStyle: TextStyle(fontSize: 12, color: p.hintText),
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 13,
+        vertical: 14,
       ),
-      content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.8,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      border: outline,
+      enabledBorder: outline,
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: p.link, width: 1.4),
+      ),
+    );
+  }
+
+  Widget _modeButton(String label, bool group) {
+    final p = _colors;
+    final selected = _isGroup == group;
+    return Expanded(
+      child: InkWell(
+        onTap: () => setState(() => _isGroup = group),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? p.card : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: selected
+                ? [BoxShadow(color: p.cardShadow, blurRadius: 8)]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Center(
-                child: SegmentedButton<bool>(
-                  segments: const [
-                    ButtonSegment<bool>(value: false, label: Text('Direct')),
-                    ButtonSegment<bool>(value: true, label: Text('Group')),
-                  ],
-                  selected: {_isGroup},
-                  onSelectionChanged: (Set<bool> newSelection) {
-                    setState(() {
-                      _isGroup = newSelection.first;
-                    });
-                  },
-                ),
-              ),
-              const SizedBox(height: 20),
-              if (_isGroup) ...[
-                const Text(
-                  'Group name',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: _groupNameController,
-                  decoration: const InputDecoration(
-                    hintText: 'შეიყვანეთ სახელი',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
+              if (selected) ...[
+                Icon(Icons.check_rounded, size: 16, color: p.link),
+                const SizedBox(width: 5),
               ],
               Text(
-                _isGroup ? 'Members' : 'Person',
-                style: const TextStyle(
+                label,
+                style: TextStyle(
+                  color: selected ? p.link : p.muted,
                   fontSize: 12,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 6),
-              _isLoadingUsers
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
-                  : _isGroup
-                  ? Container(
-                      height: 180,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: _users.length,
-                        itemBuilder: (context, index) {
-                          final user = _users[index];
-                          final userId = user['id'];
-                          final name =
-                              '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'
-                                  .trim();
-                          final isSelected = _selectedUserIds.contains(userId);
-
-                          return CheckboxListTile(
-                            title: Text(
-                              name.isEmpty ? user['email'] : name,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            value: isSelected,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                if (value == true) {
-                                  _selectedUserIds.add(userId);
-                                } else {
-                                  _selectedUserIds.remove(userId);
-                                }
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    )
-                  : DropdownButtonFormField<String>(
-                      initialValue: _selectedUserId,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Choose a colleague',
-                      ),
-                      items: _users.map<DropdownMenuItem<String>>((user) {
-                        final name =
-                            '${user['firstName'] ?? ''} ${user['lastName'] ?? ''}'
-                                .trim();
-                        return DropdownMenuItem<String>(
-                          value: user['id'],
-                          child: Text(
-                            name.isEmpty ? user['email'] : name,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedUserId = val;
-                        });
-                      },
-                    ),
-              if (_isGroup) ...[const SizedBox(height: 6)],
             ],
           ),
         ),
       ),
-      actions: [
-        FilledButton(
-          onPressed: _isSubmitting ? null : _startConversation,
-          child: _isSubmitting
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
+    );
+  }
+
+  Widget _modeSwitch() {
+    final p = _colors;
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: p.searchBackground,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [_modeButton('Direct', false), _modeButton('Group', true)],
+      ),
+    );
+  }
+
+  Widget _directFields() {
+    final p = _colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('PERSON'),
+        _isLoadingUsers
+            ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            : DropdownButtonFormField<String>(
+                initialValue: _selectedUserId,
+                isExpanded: true,
+                dropdownColor: p.card,
+                style: TextStyle(
+                  color: p.ink,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                icon: Icon(Icons.keyboard_arrow_down_rounded, color: p.muted),
+                decoration: _field('Choose a colleague'),
+                items: _users.map<DropdownMenuItem<String>>((user) {
+                  return DropdownMenuItem<String>(
+                    value: user['id'],
+                    child: Text(_name(user), overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedUserId = value),
+              ),
+      ],
+    );
+  }
+
+  Widget _groupFields() {
+    final p = _colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('GROUP NAME'),
+        TextField(
+          controller: _groupNameController,
+          style: TextStyle(color: p.ink, fontSize: 13),
+          decoration: _field('შეიყვანეთ სახელი'),
+        ),
+        const SizedBox(height: 17),
+        Row(
+          children: [
+            Expanded(child: _label('MEMBERS')),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 9,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: p.unreadBackground,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Text(
+                _selectedUserIds.length.toString() + ' Selected',
+                style: TextStyle(
+                  color: p.link,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        TextField(
+          controller: _searchController,
+          onChanged: (query) => setState(() => _memberQuery = query),
+          style: TextStyle(color: p.ink, fontSize: 12),
+          textInputAction: TextInputAction.search,
+          decoration: _field(
+            'Search members...',
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 19,
+              color: p.searchIcon,
+            ),
+            suffixIcon: _memberQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _memberQuery = '');
+                    },
+                    icon: Icon(Icons.close_rounded, size: 17, color: p.muted),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 9),
+        _memberList(),
+      ],
+    );
+  }
+
+  Widget _memberList() {
+    final p = _colors;
+    final visible = _visibleMembers;
+    final height = (MediaQuery.sizeOf(context).height * 0.26)
+        .clamp(120.0, 220.0)
+        .toDouble();
+    return Container(
+      height: height,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: p.cardBorder),
+      ),
+      child: _isLoadingUsers
+          ? const Center(child: CircularProgressIndicator())
+          : visible.isEmpty
+              ? Center(
+                  child: Text(
+                    _memberQuery.isEmpty
+                        ? 'No colleagues found'
+                        : 'No matching colleagues',
+                    style: TextStyle(color: p.muted, fontSize: 12),
                   ),
                 )
-              : const Text('Start conversation'),
+              : ListView.separated(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  itemCount: visible.length,
+                  separatorBuilder: (_, __) => Divider(
+                    color: p.cardBorder,
+                    height: 1,
+                    indent: 54,
+                    endIndent: 10,
+                  ),
+                  itemBuilder: (context, index) {
+                    final user = visible[index];
+                    final userId = user['id'] as String;
+                    final name = _name(user);
+                    final selected = _selectedUserIds.contains(userId);
+                    final paletteIndex = userId.codeUnits.fold<int>(
+                      0,
+                      (sum, code) => sum + code,
+                    ) % 4;
+                    const gradients = <List<Color>>[
+                      [Color(0xFF6C91FF), Color(0xFF315DE9)],
+                      [Color(0xFFBF6BFA), Color(0xFF823CE4)],
+                      [Color(0xFF1CD2B4), Color(0xFF0AB198)],
+                      [Color(0xFFFFBD6C), Color(0xFFE58A3B)],
+                    ];
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          setState(() {
+                            if (selected) {
+                              _selectedUserIds.remove(userId);
+                            } else {
+                              _selectedUserIds.add(userId);
+                            }
+                          });
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 33,
+                                height: 33,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: gradients[paletteIndex],
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  name.isEmpty
+                                      ? '?'
+                                      : name[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: p.ink,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      _subtitle(user),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: p.muted,
+                                        fontSize: 10,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Container(
+                                height: 19,
+                                width: 19,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(6),
+                                  color: selected
+                                      ? AppColors.primary
+                                      : p.searchBackground,
+                                  border: Border.all(
+                                    color: selected
+                                        ? AppColors.primary
+                                        : p.cardBorder,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: selected
+                                    ? const Icon(
+                                        Icons.check_rounded,
+                                        size: 14,
+                                        color: Colors.white,
+                                      )
+                                    : null,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+    );
+  }
+
+  Widget _submitButton() {
+    final button = Container(
+      height: 46,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.gradientStart, AppColors.gradientEnd],
         ),
-      ],
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primary.withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: _isSubmitting ? null : _startConversation,
+          child: Center(
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Text(
+                    'Start conversation',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+          ),
+        ),
+      ),
+    );
+    return _isGroup
+        ? SizedBox(width: double.infinity, child: button)
+        : Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(width: 182, child: button),
+          );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = _colors;
+    return Dialog(
+      backgroundColor: p.page,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 20,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(27),
+        side: BorderSide(color: p.cardBorder),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 19, 20, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'New conversation',
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                        color: p.ink,
+                      ),
+                    ),
+                  ),
+                  Material(
+                    color: p.searchBackground,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: () => Navigator.pop(context),
+                      customBorder: const CircleBorder(),
+                      child: SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: p.muted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              _modeSwitch(),
+              const SizedBox(height: 17),
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  child: _isGroup ? _groupFields() : _directFields(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _submitButton(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

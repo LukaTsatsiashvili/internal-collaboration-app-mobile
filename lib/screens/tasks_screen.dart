@@ -14,10 +14,11 @@ class TasksScreen extends StatefulWidget {
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
-class _TasksScreenState extends State<TasksScreen>
-    with SingleTickerProviderStateMixin {
+class _TasksScreenState extends State<TasksScreen> {
   final TaskService _taskService = TaskService();
-  late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  int _legacyStatusIndex = 0;
 
   bool _isLoading = true;
   bool _isCreatingGroup = false;
@@ -34,12 +35,6 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _statuses.length, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        _loadData();
-      }
-    });
     _loadData();
   }
 
@@ -52,7 +47,7 @@ class _TasksScreenState extends State<TasksScreen>
     });
 
     try {
-      final statusFilter = _statuses[_tabController.index];
+      final statusFilter = _statuses[_legacyStatusIndex];
       final results = await Future.wait([
         _taskService.getTasks(status: statusFilter),
         _taskService.getTaskGroups(),
@@ -77,7 +72,7 @@ class _TasksScreenState extends State<TasksScreen>
   @override
   void dispose() {
     _loadRequestId++;
-    _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -98,21 +93,30 @@ class _TasksScreenState extends State<TasksScreen>
     ],
   );
 
-  // The new view labels are visual-only pending backend filtering work.
-  // Existing All/Open/In Progress/Completed API filters remain in Filter.
+  // A single selected view is painted immediately with no crossfade.
+  // Only completed maps directly to a new visual tab's existing API status.
+  // Other new tab labels remain visual until their filtering is implemented.
+  // Existing Open / In Progress remain available in the Filter menu.
   void _chooseView(String label) {
-    setState(() => _selectedView = label);
     final target = label == 'Completed' ? 3 : 0;
-    if (_tabController.index != target) _tabController.animateTo(target);
+    final statusChanged = _legacyStatusIndex != target;
+    if (_selectedView == label && !statusChanged) return;
+    setState(() {
+      _selectedView = label;
+      _legacyStatusIndex = target;
+    });
+    if (statusChanged) _loadData();
   }
 
   void _chooseLegacyStatus(int index) {
-    setState(() => _selectedView = index == 3 ? 'Completed' : index == 0 ? 'All' : 'Active');
-    if (_tabController.index == index) {
-      _loadData();
-    } else {
-      _tabController.animateTo(index);
-    }
+    final label = index == 3 ? 'Completed' : index == 0 ? 'All' : 'Active';
+    final statusChanged = _legacyStatusIndex != index;
+    setState(() {
+      _selectedView = label;
+      _legacyStatusIndex = index;
+    });
+    // Keep the original ability to reselect a status to refresh the list.
+    if (statusChanged || mounted) _loadData();
   }
 
   Widget _headerButton(String title, IconData icon, VoidCallback? onPressed, {bool primary = false}) {
@@ -182,8 +186,7 @@ class _TasksScreenState extends State<TasksScreen>
         return InkWell(
           onTap: () => _chooseView(text),
           borderRadius: BorderRadius.circular(12),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
+          child: Container(
             alignment: Alignment.center,
             margin: const EdgeInsets.symmetric(vertical: 3),
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -210,15 +213,47 @@ class _TasksScreenState extends State<TasksScreen>
       const SizedBox(height: 5),
       Divider(color: _p.cardBorder, height: 1),
       Row(children: [
-        Expanded(child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-          child: Text('Search tasks', style: TextStyle(
-            color: _p.hintText, fontSize: 11,
-          )),
-        )),
+        Expanded(
+          child: TextField(
+            controller: _searchController,
+            onChanged: (text) => setState(() => _searchQuery = text),
+            textInputAction: TextInputAction.search,
+            style: TextStyle(color: _p.ink, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: 'Search tasks',
+              hintStyle: TextStyle(color: _p.hintText, fontSize: 11),
+              isDense: true,
+              filled: false,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 9,
+              ),
+              suffixIconConstraints: const BoxConstraints(
+                minHeight: 32, minWidth: 32,
+              ),
+              suffixIcon: _searchQuery.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      padding: EdgeInsets.zero,
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 17,
+                        color: _p.muted,
+                      ),
+                    ),
+            ),
+          ),
+        ),
         PopupMenuButton<int>(
           tooltip: 'Existing status filters',
-          initialValue: _tabController.index,
+          initialValue: _legacyStatusIndex,
           onSelected: _chooseLegacyStatus,
           itemBuilder: (context) => const [
             PopupMenuItem(value: 0, child: Text('All')),
@@ -274,10 +309,22 @@ class _TasksScreenState extends State<TasksScreen>
       for (final group in _groups) group['id'].toString(): <dynamic>[],
       null: <dynamic>[],
     };
+    // Search only currently loaded tasks: no extra API calls or mutations.
+    final query = _searchQuery.trim().toLowerCase();
+    final matchingTasks = query.isEmpty
+        ? _tasks
+        : _tasks.where((task) {
+            final title = (task['title'] ?? '').toString().toLowerCase();
+            final description =
+                (task['description'] ?? '').toString().toLowerCase();
+            return title.contains(query) || description.contains(query);
+          }).toList();
+
+    // Use the full task set for parent lookups, even during search.
     final tasksById = {
       for (final task in _tasks) task['id']?.toString(): task,
     };
-    for (final task in _tasks) {
+    for (final task in matchingTasks) {
       String? groupId = task['personalLayout']?['groupId']?.toString();
       if (groupId == null && task['parentTaskId'] != null) {
         final parent = tasksById[task['parentTaskId']?.toString()];
@@ -286,16 +333,32 @@ class _TasksScreenState extends State<TasksScreen>
       groupedTasks[groupedTasks.containsKey(groupId) ? groupId : null]!.add(task);
     }
     final keys = <String?>[..._groups.map((g) => g['id'].toString()), null];
+    final visibleKeys = query.isEmpty
+        ? keys
+        : keys.where((key) => groupedTasks[key]!.isNotEmpty).toList();
 
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(13, 0, 13, 22),
-      children: keys.map((groupId) {
-        final name = groupId == null
-            ? 'Ungrouped'
-            : _groups.firstWhere((g) => g['id'].toString() == groupId)['name'].toString();
-        return _taskGroup(groupId, name, groupedTasks[groupId] ?? <dynamic>[]);
-      }).toList(),
+      children: [
+        if (visibleKeys.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 56),
+            child: Center(
+              child: Text(
+                'No matching tasks',
+                style: TextStyle(color: _p.muted, fontSize: 13),
+              ),
+            ),
+          ),
+        ...visibleKeys.map((groupId) {
+          final name = groupId == null
+              ? 'Ungrouped'
+              : _groups.firstWhere((g) => g['id'].toString() == groupId)['name'].toString();
+          return _taskGroup(groupId, name, groupedTasks[groupId] ?? <dynamic>[]);
+        }),
+      ],
     );
   }
 
@@ -387,6 +450,12 @@ class _TasksScreenState extends State<TasksScreen>
         : status == 'OPEN' ? 'Open'
         : status == 'COMPLETED' ? 'Completed'
         : status;
+    // The dev-luka backend includes _count.comments in task list responses.
+    final rawCommentCount =
+        task['_count'] is Map ? task['_count']['comments'] : null;
+    final int? commentCount = rawCommentCount is num
+        ? rawCommentCount.toInt()
+        : int.tryParse(rawCommentCount?.toString() ?? '');
     final priorityText = priority.isEmpty ? 'Normal'
         : priority.substring(0, 1) + priority.substring(1).toLowerCase();
 
@@ -472,6 +541,23 @@ class _TasksScreenState extends State<TasksScreen>
                 fontWeight: FontWeight.w600, fontSize: 10),
           )),
           _tag(statusText),
+          const SizedBox(width: 9),
+          Icon(
+            Icons.chat_bubble_outline_rounded,
+            size: 13,
+            color: p.muted,
+          ),
+          if (commentCount != null) ...[
+            const SizedBox(width: 4),
+            Text(
+              commentCount.toString(),
+              style: TextStyle(
+                color: p.muted,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ]),
       ]),
     );

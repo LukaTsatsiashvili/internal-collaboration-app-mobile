@@ -35,14 +35,14 @@ class _TasksScreenState extends State<TasksScreen> {
   ];
   static const List<String> _sortOptions = [
     'Default',
-    'Due date - earliest',
-    'Due date - latest',
-    'Priority - high to low',
-    'Priority - low to high',
-    'Created - newest',
-    'Created - oldest',
-    'Title - A to Z',
-    'Title - Z to A',
+    'Due date · earliest',
+    'Due date · latest',
+    'Priority · high to low',
+    'Priority · low to high',
+    'Created · newest',
+    'Created · oldest',
+    'Title · A to Z',
+    'Title · Z to A',
     'Status',
   ];
   static const Map<String, int> _priorityOrder = {
@@ -175,24 +175,24 @@ class _TasksScreenState extends State<TasksScreen> {
 
   int _compareTasks(dynamic a, dynamic b) {
     switch (_selectedSort) {
-      case 'Due date - earliest':
+      case 'Due date · earliest':
         return _compareDate(a['dueDate'], b['dueDate']);
-      case 'Due date - latest':
+      case 'Due date · latest':
         return _compareDate(a['dueDate'], b['dueDate'], descending: true);
-      case 'Priority - high to low':
+      case 'Priority · high to low':
         return (_priorityOrder[(b['priority'] ?? '').toString()] ?? 1)
             .compareTo(_priorityOrder[(a['priority'] ?? '').toString()] ?? 1);
-      case 'Priority - low to high':
+      case 'Priority · low to high':
         return (_priorityOrder[(a['priority'] ?? '').toString()] ?? 1)
             .compareTo(_priorityOrder[(b['priority'] ?? '').toString()] ?? 1);
-      case 'Created - newest':
+      case 'Created · newest':
         return _compareDate(a['createdAt'], b['createdAt'], descending: true);
-      case 'Created - oldest':
+      case 'Created · oldest':
         return _compareDate(a['createdAt'], b['createdAt']);
-      case 'Title - A to Z':
+      case 'Title · A to Z':
         return (a['title'] ?? '').toString().toLowerCase()
             .compareTo((b['title'] ?? '').toString().toLowerCase());
-      case 'Title - Z to A':
+      case 'Title · Z to A':
         return (b['title'] ?? '').toString().toLowerCase()
             .compareTo((a['title'] ?? '').toString().toLowerCase());
       case 'Status':
@@ -235,14 +235,14 @@ class _TasksScreenState extends State<TasksScreen> {
 
   String get _shortSortLabel {
     switch (_selectedSort) {
-      case 'Due date - earliest': return 'Due ↑';
-      case 'Due date - latest': return 'Due ↓';
-      case 'Priority - high to low': return 'Priority ↓';
-      case 'Priority - low to high': return 'Priority ↑';
-      case 'Created - newest': return 'New ↑';
-      case 'Created - oldest': return 'Old ↑';
-      case 'Title - A to Z': return 'Title A-Z';
-      case 'Title - Z to A': return 'Title Z-A';
+      case 'Due date · earliest': return 'Due ↑';
+      case 'Due date · latest': return 'Due ↓';
+      case 'Priority · high to low': return 'Priority ↓';
+      case 'Priority · low to high': return 'Priority ↑';
+      case 'Created · newest': return 'New ↑';
+      case 'Created · oldest': return 'Old ↑';
+      case 'Title · A to Z': return 'Title A-Z';
+      case 'Title · Z to A': return 'Title Z-A';
       case 'Status': return 'Status';
       default: return 'Default';
     }

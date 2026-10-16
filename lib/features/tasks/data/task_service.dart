@@ -169,6 +169,35 @@ class TaskService {
     }
   }
 
+  // Full task includes participants, subtasks, comments, history, attachments.
+  Future<Map<String, dynamic>> getTaskDetails(String taskId) async {
+    final response = await _apiClient.dio.get('/tasks/$taskId');
+    if (response.data['success'] != true) {
+      throw Exception('დავალების დეტალების ჩატვირთვა ვერ მოხერხდა');
+    }
+    return Map<String, dynamic>.from(response.data['data'] as Map);
+  }
+
+  // The backend validates comment text and checks that attached files
+  // were uploaded by the current authenticated user.
+  Future<void> addTaskComment(
+    String taskId, {
+    required String content,
+    List<String> attachmentIds = const [],
+  }) async {
+    await _apiClient.dio.post('/tasks/$taskId/comments', data: {
+      'content': content.trim(),
+      'attachmentIds': attachmentIds,
+    });
+  }
+
+  // Authenticated Dio client uses the same token and refresh interceptor as
+  // task requests. Store only in a temporary path; the system file picker
+  // chooses the final destination.
+  Future<void> downloadFileToPath(String fileId, String path) async {
+    await _apiClient.dio.download('/files/$fileId/download', path);
+  }
+
   // 7. სტატუსის განახლება
   Future<void> updateTaskStatus(String taskId, String newStatus) async {
     try {

@@ -1,14 +1,237 @@
 import 'package:flutter/material.dart';
 
+import '../features/notifications/data/notification_service.dart';
+import '../features/tasks/data/task_service.dart';
+import '../features/chat/data/chat_service.dart';
+import 'task_details_sheet.dart';
+import 'chats_screen.dart';
+import 'approvals_screen.dart';
+
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 
-/// Stitch-inspired notification inbox.
-/// The three existing sample notifications are intentionally unchanged.
-/// Read All and the category tabs remain presentation-only until their
-/// behaviour is implemented in a separate task.
-class NotificationsScreen extends StatelessWidget {
+
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen>
+    with WidgetsBindingObserver {
+  final NotificationService _service = NotificationService();
+  List<Map<String, dynamic>> _items = [];
+  int _unreadCount = 0;
+  int _requestVersion = 0;
+  bool _loading = true;
+  bool _markingAll = false;
+  String? _busyId;
+  String? _error;
+  String _filter = 'all';
+
+  List<Map<String, dynamic>> get _visibleItems {
+    if (_filter == 'unread') {
+      return _items.where((item) => item['isRead'] != true).toList();
+    }
+    if (_filter == 'mentions') {
+      return _items.where((item) => item['type'] == 'MENTION').toList();
+    }
+    return _items;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+    _connect();
+  }
+
+  Future<void> _connect() async {
+    try {
+      await _service.connect(() {
+        if (mounted) _load(silent: true);
+      });
+    } catch (_) {
+      // The REST inbox still works when the socket is unavailable.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load(silent: true);
+  }
+
+  @override
+  void dispose() {
+    _requestVersion++;
+    WidgetsBinding.instance.removeObserver(this);
+    _service.disposeSocket();
+    super.dispose();
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    final version = ++_requestVersion;
+    if (!silent && mounted) setState(() => _loading = true);
+    try {
+      final inbox = await _service.getInbox();
+      if (!mounted || version != _requestVersion) return;
+      setState(() {
+        _items = inbox.items;
+        _unreadCount = inbox.unreadCount;
+        _error = null;
+      });
+    } catch (error) {
+      if (!mounted || version != _requestVersion) return;
+      setState(() {
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    } finally {
+      if (mounted && version == _requestVersion) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  void _message(String value) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
+  }
+
+  Future<void> _readAll() async {
+    if (_markingAll || _unreadCount == 0) return;
+    setState(() => _markingAll = true);
+    try {
+      await _service.markAllRead();
+      await _load(silent: true);
+    } catch (error) {
+      _message(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _markingAll = false);
+    }
+  }
+
+  /// Long-press toggles read/unread without changing the card layout.
+  Future<void> _toggleRead(Map<String, dynamic> item) async {
+    final id = item['id']?.toString();
+    if (id == null || id.isEmpty || _busyId != null) return;
+    setState(() => _busyId = id);
+    try {
+      if (item['isRead'] == true) {
+        await _service.markUnread(id);
+      } else {
+        await _service.markRead(id);
+      }
+      await _load(silent: true);
+    } catch (error) {
+      _message(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _open(Map<String, dynamic> item) async {
+    final id = item['id']?.toString();
+    if (id == null || id.isEmpty || _busyId != null) return;
+    setState(() => _busyId = id);
+    try {
+      if (item['isRead'] != true) await _service.markRead(id);
+      if (!mounted) return;
+      await _load(silent: true);
+      if (!mounted) return;
+      final url = item['targetUrl']?.toString();
+      if (url == null || url.isEmpty) return;
+      final uri = Uri.tryParse(url);
+      if (uri == null) return;
+      if (uri.path == '/tasks') {
+        final taskId = uri.queryParameters['task'];
+        if (taskId == null || taskId.isEmpty) return;
+        final service = TaskService();
+        List<dynamic> groups = [];
+        try {
+          groups = await service.getTaskGroups();
+        } catch (_) {
+          // The task remains accessible without the personal groups list.
+        }
+        if (!mounted) return;
+        await showModalBottomSheet<bool>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          clipBehavior: Clip.none,
+          builder: (_) => TaskDetailsSheet(
+            taskId: taskId, service: service, groups: groups,
+          ),
+        );
+      } else if (uri.path == '/chat') {
+        final conversationId = uri.queryParameters['conversation'];
+        if (conversationId == null || conversationId.isEmpty) return;
+        final chats = await ChatService().getConversations();
+        Map<dynamic, dynamic>? selected;
+        for (final chat in chats) {
+          if (chat is Map && chat['id']?.toString() == conversationId) {
+            selected = chat;
+            break;
+          }
+        }
+        if (selected == null) throw StateError('საუბარი მიუწვდომელია');
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ChatDetailScreen(
+            conversationId: conversationId,
+            chatName: (selected!['name'] ?? selected['title'] ?? 'Messages').toString(),
+          ),
+        ));
+      } else if (uri.path == '/approvals') {
+        final requestId = uri.queryParameters['request'];
+        if (requestId == null || requestId.isEmpty || !mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => ApprovalsScreen(focusRequestId: requestId),
+        ));
+      }
+    } catch (error) {
+      _message(error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _busyId = null);
+        _load(silent: true);
+      }
+    }
+  }
+
+  static IconData _iconFor(String type) {
+    if (type.startsWith('TASK_')) return Icons.task_alt_rounded;
+    if (type.startsWith('APPROVAL_')) return Icons.assignment_turned_in_outlined;
+    if (type == 'MESSAGE' || type == 'MESSAGE_REACTION' || type == 'MENTION') {
+      return Icons.chat_bubble_outline_rounded;
+    }
+    return Icons.notifications_none_rounded;
+  }
+
+  static Color _colorFor(String type) {
+    if (type.startsWith('TASK_')) return const Color(0xFF16BE89);
+    if (type.startsWith('APPROVAL_')) return const Color(0xFF4385F7);
+    if (type == 'MESSAGE' || type == 'MESSAGE_REACTION' || type == 'MENTION') {
+      return const Color(0xFFF2A52C);
+    }
+    return const Color(0xFF4385F7);
+  }
+
+  static String _timeFor(dynamic raw) {
+    final date = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    final ago = DateTime.now().difference(date);
+    if (ago.isNegative || ago.inMinutes < 1) return 'ახლახან';
+    if (ago.inMinutes < 60) return '${ago.inMinutes} წუთის წინ';
+    if (ago.inHours < 24) return '${ago.inHours} საათის წინ';
+    if (ago.inDays == 1) return 'გუშინ';
+    if (ago.inDays < 7) return '${ago.inDays} დღის წინ';
+    return '${date.day.toString().padLeft(2, '0')}.' +
+        '${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,7 +289,7 @@ class NotificationsScreen extends StatelessWidget {
             child: Center(
               child: TextButton(
                 // Preserve the existing no-op action.
-                onPressed: () {},
+                onPressed: _markingAll || _unreadCount == 0 ? null : _readAll,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 33),
                   padding: const EdgeInsets.symmetric(horizontal: 13),
@@ -107,20 +330,23 @@ class NotificationsScreen extends StatelessWidget {
                 children: [
                   _filterPill(
                     palette: palette,
-                    title: 'All (3)',
-                    selected: true,
+                    title: 'All (${_items.length})',
+                    selected: _filter == 'all',
+                    onTap: () => setState(() => _filter = 'all'),
                   ),
                   const SizedBox(width: 8),
                   _filterPill(
                     palette: palette,
-                    title: 'Unread (2)',
-                    selected: false,
+                    title: 'Unread ($_unreadCount)',
+                    selected: _filter == 'unread',
+                    onTap: () => setState(() => _filter = 'unread'),
                   ),
                   const SizedBox(width: 8),
                   _filterPill(
                     palette: palette,
                     title: 'Mentions',
-                    selected: false,
+                    selected: _filter == 'mentions',
+                    onTap: () => setState(() => _filter = 'mentions'),
                   ),
                 ],
               ),
@@ -138,41 +364,44 @@ class NotificationsScreen extends StatelessWidget {
                 : [palette.page, const Color(0xFFEDF9F5)],
           ),
         ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(13, 13, 13, 25),
-          children: [
-            _buildNotificationItem(
-              icon: Icons.task_alt_rounded,
-              color: const Color(0xFF16BE89),
-              title: 'დავალება განახლდა',
-              description:
-                  'გიორგიმ შეცვალა დავალების სტატუსი: API სერვისის ოპტიმიზაცია.',
-              time: '15 წუთის წინ',
-              isRead: false,
-              context: context,
-            ),
-            const SizedBox(height: 11),
-            _buildNotificationItem(
-              icon: Icons.assignment_turned_in_outlined,
-              color: const Color(0xFF4385F7),
-              title: 'ახალი დამტკიცების ნაბიჯი',
-              description:
-                  'თქვენ გევალებათ აღჭურვილობის შეძენის მოთხოვნის განხილვა.',
-              time: '2 საათის წინ',
-              isRead: false,
-              context: context,
-            ),
-            const SizedBox(height: 11),
-            _buildNotificationItem(
-              icon: Icons.chat_bubble_outline_rounded,
-              color: const Color(0xFFF2A52C),
-              title: 'ახალი მითითება (Mention)',
-              description: 'ნინომ დაგგაკოთ არხში: #IT დეპარტამენტი.',
-              time: 'გუშინ',
-              isRead: true,
-              context: context,
-            ),
-          ],
+        child: RefreshIndicator(
+          onRefresh: () => _load(silent: true),
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(13, 13, 13, 25),
+            children: [
+              if (_loading && _items.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(30),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_error != null && _items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Center(child: Text(_error!, textAlign: TextAlign.center)),
+                )
+              else if (_visibleItems.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(28),
+                  child: Center(child: Text('შეტყობინებები არ მოიძებნა')),
+                )
+              else
+                for (final item in _visibleItems) ...[
+                  _buildNotificationItem(
+                    icon: _iconFor((item['type'] ?? '').toString()),
+                    color: _colorFor((item['type'] ?? '').toString()),
+                    title: (item['title'] ?? '').toString(),
+                    description: (item['body'] ?? '').toString(),
+                    time: _timeFor(item['createdAt']),
+                    isRead: item['isRead'] == true,
+                    context: context,
+                    onTap: () => _open(item),
+                    onLongPress: () => _toggleRead(item),
+                  ),
+                  const SizedBox(height: 11),
+                ],
+            ],
+          ),
         ),
       ),
     );
@@ -182,9 +411,11 @@ class NotificationsScreen extends StatelessWidget {
     required AppPalette palette,
     required String title,
     required bool selected,
+    required VoidCallback onTap,
   }) {
-    // Deliberately decorative: filters are not implemented in this UI task.
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
       decoration: BoxDecoration(
         color: selected ? AppColors.primary : palette.card,
@@ -211,6 +442,7 @@ class NotificationsScreen extends StatelessWidget {
           fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
         ),
       ),
+      ),
     );
   }
 
@@ -222,11 +454,16 @@ class NotificationsScreen extends StatelessWidget {
     required String time,
     required bool isRead,
     required BuildContext context,
+    required VoidCallback onTap,
+    required VoidCallback onLongPress,
   }) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 15, 13, 15),
       decoration: BoxDecoration(
@@ -327,6 +564,96 @@ class NotificationsScreen extends StatelessWidget {
           ],
         ],
       ),
+      ),
+    );
+  }
+}
+
+class NotificationBellButton extends StatefulWidget {
+  const NotificationBellButton({super.key, required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  State<NotificationBellButton> createState() => _NotificationBellButtonState();
+}
+
+class _NotificationBellButtonState extends State<NotificationBellButton>
+    with WidgetsBindingObserver {
+  final NotificationService _service = NotificationService();
+  int _unread = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refresh();
+    _connect();
+  }
+
+  Future<void> _connect() async {
+    try {
+      await _service.connect(() {
+        if (mounted) _refresh();
+      });
+    } catch (_) {
+      // A socket outage must never disable the notification button.
+    }
+  }
+
+  Future<void> _refresh() async {
+    try {
+      final inbox = await _service.getInbox();
+      if (mounted) setState(() => _unread = inbox.unreadCount);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _refresh();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _service.disposeSocket();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: 'შეტყობინებები',
+          padding: EdgeInsets.zero,
+          onPressed: widget.onPressed,
+          icon: Icon(Icons.notifications_none_rounded, color: palette.ink, size: 22),
+        ),
+        if (_unread > 0)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: IgnorePointer(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.all(Radius.circular(9)),
+                ),
+                child: Text(
+                  _unread > 99 ? '99+' : '$_unread',
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

@@ -21,6 +21,7 @@ class MainActivity : FlutterActivity() {
 
     // Android may restore its system bars after document pickers and other
     // native windows. Reapply the same transient-by-swipe immersive behavior.
+    @Suppress("DEPRECATION")
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus) return
@@ -31,7 +32,6 @@ class MainActivity : FlutterActivity() {
                 hide(WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
             }
         } else {
-            @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
                     View.SYSTEM_UI_FLAG_FULLSCREEN or

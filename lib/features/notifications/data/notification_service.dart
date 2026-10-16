@@ -14,6 +14,7 @@ class NotificationService {
   final ApiClient _api = ApiClient();
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   IO.Socket? _socket;
+  int _socketVersion = 0;
 
   Future<NotificationInbox> getInbox() async {
     final response = await _api.dio.get('/notifications');
@@ -47,8 +48,9 @@ class NotificationService {
   /// Socket events are invalidation hints; the REST API is the source of truth.
   Future<void> connect(void Function() refresh) async {
     disposeSocket();
+    final version = _socketVersion;
     final token = await _storage.read(key: 'access_token');
-    if (token == null || token.isEmpty) return;
+    if (version != _socketVersion || token == null || token.isEmpty) return;
     final socket = IO.io(Uri.parse(ApiClient.baseUrl).origin, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
@@ -64,6 +66,7 @@ class NotificationService {
   }
 
   void disposeSocket() {
+    _socketVersion++;
     final socket = _socket;
     _socket = null;
     socket?.disconnect();

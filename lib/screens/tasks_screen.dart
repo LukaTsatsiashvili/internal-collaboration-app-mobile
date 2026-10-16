@@ -609,6 +609,10 @@ class _TasksScreenState extends State<TasksScreen> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      // The sheet now renders its own inset, fully rounded card.
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      clipBehavior: Clip.none,
       builder: (_) => TaskCreateSheet(service: _taskService, groups: _groups),
     );
     if (!mounted || draft == null || _isCreatingTask) return;

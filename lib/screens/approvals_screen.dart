@@ -49,13 +49,16 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

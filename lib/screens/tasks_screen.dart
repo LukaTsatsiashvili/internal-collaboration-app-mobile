@@ -250,11 +250,22 @@ class _TasksScreenState extends State<TasksScreen> {
 
   Widget _sortMenu() {
     final p = _p;
-    return PopupMenuButton<String>(
+    // Local theme prevents tap/hover feedback in the popup without changing
+    // the persistent blue background of the chosen sorting option.
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+      ),
+      child: PopupMenuButton<String>(
       tooltip: 'Sort tasks',
       position: PopupMenuPosition.under,
       offset: const Offset(0, 5),
-      initialValue: _selectedSort,
+      // No initialValue: it makes Flutter pre-scroll the selected row into
+      // position, cutting off the first Default item on smaller screens.
       onSelected: (value) => setState(() => _selectedSort = value),
       constraints: BoxConstraints(
         minWidth: 250,
@@ -279,7 +290,7 @@ class _TasksScreenState extends State<TasksScreen> {
           widgets.add(
             PopupMenuItem<String>(
               value: label,
-              height: 51,
+              height: i == 0 || i == _sortOptions.length - 1 ? 63 : 51,
               padding: const EdgeInsets.symmetric(horizontal: 11),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -330,6 +341,7 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -593,8 +605,13 @@ class _TasksScreenState extends State<TasksScreen> {
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
       child: ExpansionTile(
-        key: PageStorageKey<String>('task-group-' + (groupId ?? 'ungrouped')),
-        initiallyExpanded: true,
+        // Empty groups start closed and groups with tasks start open;
+        // PageStorage remembers manual expanded/collapsed changes afterwards.
+        key: PageStorageKey<String>(
+          'task-group-' + (groupId ?? 'ungrouped') +
+              (tasks.isEmpty ? '-empty' : '-populated'),
+        ),
+        initiallyExpanded: tasks.isNotEmpty,
         dense: true,
         controlAffinity: ListTileControlAffinity.leading,
         tilePadding: EdgeInsets.zero,

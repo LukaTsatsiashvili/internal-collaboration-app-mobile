@@ -132,10 +132,9 @@ class _TasksScreenState extends State<TasksScreen> {
     final userId = _currentUserId;
     switch (_selectedView) {
       case 'Active':
-        // Draft and cancelled tasks are not active; waiting/blocking tasks are.
-        return const {
-          'OPEN', 'IN_PROGRESS', 'BLOCKED', 'WAITING_REVIEW',
-        }.contains(status);
+        // Match the web TasksPage quick filter: every status except done
+        // and cancelled (including drafts) is considered active.
+        return status != 'COMPLETED' && status != 'CANCELLED';
       case 'Assigned':
         return userId != null && task['assigneeId']?.toString() == userId;
       case 'Created':
@@ -204,17 +203,30 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
+  int _manualPosition(dynamic task) {
+    final value = task['personalLayout']?['position'];
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 2147483647;
+  }
+
+  int _compareManualPosition(dynamic a, dynamic b) =>
+      _manualPosition(a).compareTo(_manualPosition(b));
+
   void _sortWithinGroups(
     Map<String?, List<dynamic>> grouped,
     Map<String, int> originalOrder,
   ) {
-    if (_selectedSort == 'Default') return;
     for (final tasks in grouped.values) {
       tasks.sort((a, b) {
-        final comparison = _compareTasks(a, b);
+        // Match the web's Default/manual position ordering, but only display
+        // "Default" in the picker. Do not modify positions on the server.
+        final comparison = _selectedSort == 'Default'
+            ? _compareManualPosition(a, b)
+            : _compareTasks(a, b);
         if (comparison != 0) return comparison;
-        // Dart's List.sort is not stable. Keep the existing API order for
-        // equal values rather than shuffling cards as tabs/search change.
+        final manual = _compareManualPosition(a, b);
+        if (manual != 0) return manual;
+        // Stable tie-breaker for tasks with identical/missing positions.
         return (originalOrder[a['id']?.toString()] ?? 0)
             .compareTo(originalOrder[b['id']?.toString()] ?? 0);
       });

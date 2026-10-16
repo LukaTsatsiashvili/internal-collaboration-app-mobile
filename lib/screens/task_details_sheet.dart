@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/theme/app_colors.dart';
@@ -35,6 +37,7 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
   ];
 
   final _commentController = TextEditingController();
+  IO.Socket? _socket;
   Map<String, dynamic>? _task;
   XFile? _commentFile;
   String? _error;
@@ -51,10 +54,42 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
   void initState() {
     super.initState();
     _load();
+    _connectRealtime();
+  }
+
+  Future<void> _connectRealtime() async {
+    try {
+      final token = await const FlutterSecureStorage().read(key: 'access_token');
+      if (!mounted || token == null || token.isEmpty) return;
+      final socket = IO.io('https://collaboration.gtexshop.ge', <String, dynamic>{
+        'transports': ['websocket'],
+        'forceNew': true,
+        'autoConnect': false,
+        'auth': {'token': token},
+      });
+      if (!mounted) {
+        socket.dispose();
+        return;
+      }
+      _socket = socket;
+      void refreshIfCurrent(dynamic event) {
+        if (!mounted || event is! Map) return;
+        final id = event['taskId'] ?? event['id'];
+        if (id?.toString() == widget.taskId) _load(showSpinner: false);
+      }
+      socket.on('task:comment-created', refreshIfCurrent);
+      socket.on('task:updated', refreshIfCurrent);
+      socket.connect();
+    } catch (_) {
+      // Task details and manual actions remain usable without a socket.
+    }
   }
 
   @override
   void dispose() {
+    _socket?.disconnect();
+    _socket?.dispose();
+    _socket = null;
     _commentController.dispose();
     super.dispose();
   }
@@ -324,7 +359,7 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
       color: _p.unreadBackground,
       borderRadius: BorderRadius.circular(size / 3),
     ),
-    child: Text(value.isEmpty ? '?' : value.characters.first.toUpperCase(),
+    child: Text(value.isEmpty ? '?' : String.fromCharCode(value.runes.first).toUpperCase(),
       style: TextStyle(color: _p.link, fontSize: size * 0.42,
           fontWeight: FontWeight.w800)),
   );

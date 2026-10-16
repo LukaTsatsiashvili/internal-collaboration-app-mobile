@@ -289,6 +289,9 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
     );
   }
 
+  // The same anchor and popup treatment is shared by Assignee, Priority,
+  // and Group. Popup item indexes preserve nullable field selections (the
+  // Unassigned/Ungrouped option returns null from the existing callback).
   Widget _dropdown<T>({
     required T? value,
     required List<DropdownMenuItem<T>> items,
@@ -296,27 +299,213 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
     String? hint,
   }) {
     final p = _p;
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      isExpanded: true,
-      dropdownColor: p.card,
-      borderRadius: BorderRadius.circular(17),
-      menuMaxHeight: MediaQuery.sizeOf(context).height * 0.40,
-      icon: Icon(
-        Icons.keyboard_arrow_down_rounded,
-        size: 20,
-        color: p.muted,
-      ),
-      style: TextStyle(
-        color: p.ink,
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-      decoration: _fieldDecoration(hint ?? ''),
-      items: items,
-      onChanged: onChanged,
+    final selectedIndex = items.indexWhere((item) => item.value == value);
+    final selectedChild = selectedIndex >= 0
+        ? items[selectedIndex].child
+        : Text(
+            hint ?? 'Select an option',
+            style: TextStyle(color: p.hintText, fontSize: 13),
+          );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final menuWidth = constraints.maxWidth;
+        final menuHeight = (MediaQuery.sizeOf(context).height * 0.38)
+            .clamp(150.0, 320.0)
+            .toDouble();
+
+        return PopupMenuButton<int>(
+          tooltip: hint ?? 'Choose option',
+          position: PopupMenuPosition.under,
+          offset: const Offset(0, 5),
+          padding: EdgeInsets.zero,
+          elevation: 12,
+          color: p.card,
+          constraints: BoxConstraints(
+            minWidth: menuWidth,
+            maxWidth: menuWidth,
+            maxHeight: menuHeight,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(19),
+            side: BorderSide(color: p.cardBorder),
+          ),
+          onSelected: (index) => onChanged(items[index].value),
+          itemBuilder: (context) => [
+            for (var i = 0; i < items.length; i++)
+              PopupMenuItem<int>(
+                value: i,
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 11),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: i == selectedIndex
+                        ? p.unreadBackground
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(child: items[i].child),
+                      if (i == selectedIndex) ...[
+                        const SizedBox(width: 6),
+                        Icon(Icons.check_rounded, color: p.link, size: 18),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+          child: Container(
+            height: 55,
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 13),
+            decoration: BoxDecoration(
+              color: p.card,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: p.cardBorder),
+            ),
+            child: Row(
+              children: [
+                Expanded(child: selectedChild),
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: p.muted,
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
+
+  // Matches the decorated user entry already used in Participants.
+  Widget _userAvatar(dynamic user) {
+    final id = (user['id'] ?? '').toString();
+    final hash = id.codeUnits.fold<int>(
+      0,
+      (total, code) => total + code,
+    );
+    const colors = [
+      Color(0xFF657FF1),
+      Color(0xFF2B9DD7),
+      Color(0xFF9B65E7),
+      Color(0xFF17BFA1),
+    ];
+    final accent = colors[hash % colors.length];
+
+    return Container(
+      width: 32,
+      height: 32,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(
+        Icons.business_outlined,
+        size: 17,
+        color: accent,
+      ),
+    );
+  }
+
+  Widget _assigneeItem(dynamic user) {
+    final p = _p;
+    final subtitle = _userSubtitle(user);
+    return Row(
+      children: [
+        _userAvatar(user),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _userName(user),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: p.ink,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: p.muted,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _unassignedItem() => Row(
+    children: [
+      _optionIcon(Icons.person_outline_rounded),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          'Unassigned',
+          style: TextStyle(
+            color: _p.secondaryText,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
+
+  Widget _optionIcon(IconData icon) {
+    final p = _p;
+    return Container(
+      height: 32,
+      width: 32,
+      decoration: BoxDecoration(
+        color: p.unreadBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Icon(icon, size: 17, color: p.link),
+    );
+  }
+
+  Widget _groupItem(String name) => Row(
+    children: [
+      _optionIcon(Icons.folder_outlined),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: _p.ink,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
 
   Color _priorityColor(String level) {
     switch (level) {
@@ -448,18 +637,6 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                           final id = user['id'].toString();
                           final selected = _participantIds.contains(id);
                           final name = _userName(user);
-                          final hash = id.codeUnits.fold<int>(
-                            0,
-                            (total, code) => total + code,
-                          );
-                          const colors = [
-                            Color(0xFF657FF1),
-                            Color(0xFF2B9DD7),
-                            Color(0xFF9B65E7),
-                            Color(0xFF17BFA1),
-                          ];
-                          final accent = colors[hash % colors.length];
-
                           return Material(
                             color: Colors.transparent,
                             child: InkWell(
@@ -480,20 +657,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                                 ),
                                 child: Row(
                                   children: [
-                                    Container(
-                                      width: 32,
-                                      height: 32,
-                                      alignment: Alignment.center,
-                                      decoration: BoxDecoration(
-                                        color: accent.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(
-                                        Icons.business_outlined,
-                                        size: 17,
-                                        color: accent,
-                                      ),
-                                    ),
+                                    _userAvatar(user),
                                     const SizedBox(width: 10),
                                     Expanded(
                                       child: Column(
@@ -589,17 +753,14 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
               value: _assigneeId,
               hint: 'Unassigned',
               items: [
-                const DropdownMenuItem<String>(
+                DropdownMenuItem<String>(
                   value: null,
-                  child: Text('Unassigned'),
+                  child: _unassignedItem(),
                 ),
                 ...users.map(
                   (user) => DropdownMenuItem<String>(
                     value: user['id'].toString(),
-                    child: Text(
-                      _userName(user),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: _assigneeItem(user),
                   ),
                 ),
               ],
@@ -645,17 +806,14 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
           value: _groupId,
           hint: 'Ungrouped',
           items: [
-            const DropdownMenuItem<String>(
+            DropdownMenuItem<String>(
               value: null,
-              child: Text('Ungrouped'),
+              child: _groupItem('Ungrouped'),
             ),
             ...widget.groups.map(
               (group) => DropdownMenuItem<String>(
                 value: group['id'].toString(),
-                child: Text(
-                  group['name'].toString(),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: _groupItem(group['name'].toString()),
               ),
             ),
           ],
@@ -781,19 +939,23 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
     final keyboardInset = media.viewInsets.bottom;
     final availableHeight =
         media.size.height - keyboardInset - media.padding.top;
-    final sheetHeight = (availableHeight * 0.94).clamp(0.0, media.size.height);
+    final sheetHeight =
+        (availableHeight * 0.89).clamp(0.0, media.size.height).toDouble();
 
     return SafeArea(
       top: false,
       child: Padding(
-        padding: EdgeInsets.only(bottom: keyboardInset),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: sheetHeight),
-          child: Material(
-            color: p.page,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(27),
+        padding: EdgeInsets.fromLTRB(12, 0, 12, keyboardInset + 9),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 460,
+              maxHeight: sheetHeight,
             ),
+            child: Material(
+              color: p.page,
+              borderRadius: BorderRadius.circular(27),
             clipBehavior: Clip.antiAlias,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -887,6 +1049,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                 ),
                 _footer(),
               ],
+            ),
             ),
           ),
         ),

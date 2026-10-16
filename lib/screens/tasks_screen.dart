@@ -18,7 +18,9 @@ class _TasksScreenState extends State<TasksScreen> {
   final TaskService _taskService = TaskService();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  int _legacyStatusIndex = 0;
+  String? _statusFilter;
+  String? _currentUserId;
+  String _selectedSort = 'Default';
 
   bool _isLoading = true;
   bool _isCreatingGroup = false;
@@ -28,8 +30,28 @@ class _TasksScreenState extends State<TasksScreen> {
   List<dynamic> _groups = [];
   String? _errorMessage;
 
-  final List<String?> _statuses = [null, 'OPEN', 'IN_PROGRESS', 'COMPLETED'];
-  static const List<String> _viewLabels = ['All', 'Active', 'Assigned', 'Created', 'Participant', 'Completed'];
+  static const List<String> _viewLabels = [
+    'All', 'Active', 'Assigned', 'Created', 'Participant', 'Completed',
+  ];
+  static const List<String> _sortOptions = [
+    'Default',
+    'Due date - earliest',
+    'Due date - latest',
+    'Priority - high to low',
+    'Priority - low to high',
+    'Created - newest',
+    'Created - oldest',
+    'Title - A to Z',
+    'Title - Z to A',
+    'Status',
+  ];
+  static const Map<String, int> _priorityOrder = {
+    'LOW': 0, 'NORMAL': 1, 'HIGH': 2, 'URGENT': 3,
+  };
+  static const Map<String, int> _statusOrder = {
+    'DRAFT': 0, 'OPEN': 1, 'IN_PROGRESS': 2, 'BLOCKED': 3,
+    'WAITING_REVIEW': 4, 'COMPLETED': 5, 'CANCELLED': 6,
+  };
   String _selectedView = 'All';
 
   @override
@@ -47,15 +69,20 @@ class _TasksScreenState extends State<TasksScreen> {
     });
 
     try {
-      final statusFilter = _statuses[_legacyStatusIndex];
-      final results = await Future.wait([
-        _taskService.getTasks(status: statusFilter),
+      // Fetch the full accessible list once: every category/search/sort is
+      // applied locally, so switching tabs never triggers new requests.
+      final results = await Future.wait<dynamic>([
+        _taskService.getTasks(),
         _taskService.getTaskGroups(),
+        _currentUserId == null
+            ? _taskService.getCurrentUserId()
+            : Future<String>.value(_currentUserId!),
       ]);
       if (!mounted || requestId != _loadRequestId) return;
       setState(() {
-        _tasks = results[0];
-        _groups = results[1];
+        _tasks = results[0] as List<dynamic>;
+        _groups = results[1] as List<dynamic>;
+        _currentUserId = results[2] as String;
       });
     } catch (error) {
       if (!mounted || requestId != _loadRequestId) return;
@@ -93,30 +120,206 @@ class _TasksScreenState extends State<TasksScreen> {
     ],
   );
 
-  // A single selected view is painted immediately with no crossfade.
-  // Only completed maps directly to a new visual tab's existing API status.
-  // Other new tab labels remain visual until their filtering is implemented.
-  // Existing Open / In Progress remain available in the Filter menu.
+  // These six views are mutually exclusive; each reflects the current user
+  // and the exact status fields returned by the dev-luka backend.
   void _chooseView(String label) {
-    final target = label == 'Completed' ? 3 : 0;
-    final statusChanged = _legacyStatusIndex != target;
-    if (_selectedView == label && !statusChanged) return;
-    setState(() {
-      _selectedView = label;
-      _legacyStatusIndex = target;
-    });
-    if (statusChanged) _loadData();
+    if (_selectedView == label) return;
+    setState(() => _selectedView = label);
   }
 
-  void _chooseLegacyStatus(int index) {
-    final label = index == 3 ? 'Completed' : index == 0 ? 'All' : 'Active';
-    final statusChanged = _legacyStatusIndex != index;
-    setState(() {
-      _selectedView = label;
-      _legacyStatusIndex = index;
-    });
-    // Keep the original ability to reselect a status to refresh the list.
-    if (statusChanged || mounted) _loadData();
+  bool _matchesCategory(dynamic task) {
+    final status = (task['status'] ?? '').toString().toUpperCase();
+    final userId = _currentUserId;
+    switch (_selectedView) {
+      case 'Active':
+        // Draft and cancelled tasks are not active; waiting/blocking tasks are.
+        return const {
+          'OPEN', 'IN_PROGRESS', 'BLOCKED', 'WAITING_REVIEW',
+        }.contains(status);
+      case 'Assigned':
+        return userId != null && task['assigneeId']?.toString() == userId;
+      case 'Created':
+        return userId != null && task['creatorId']?.toString() == userId;
+      case 'Participant':
+        final participants = task['participants'];
+        return userId != null &&
+            participants is List &&
+            participants.any((p) =>
+                p is Map &&
+                (p['userId']?.toString() == userId ||
+                    (p['user'] is Map &&
+                        p['user']['id']?.toString() == userId)));
+      case 'Completed':
+        return status == 'COMPLETED';
+      default:
+        return true;
+    }
+  }
+
+  bool _matchesStatus(dynamic task) =>
+      _statusFilter == null ||
+      (task['status'] ?? '').toString().toUpperCase() == _statusFilter;
+
+  void _chooseLegacyStatus(String value) {
+    setState(() => _statusFilter = value == 'ALL' ? null : value);
+  }
+
+  int _compareDate(dynamic first, dynamic second, {bool descending = false}) {
+    final a = DateTime.tryParse((first ?? '').toString());
+    final b = DateTime.tryParse((second ?? '').toString());
+    // Missing dates are always last, in both directions.
+    if (a == null) return b == null ? 0 : 1;
+    if (b == null) return -1;
+    final comparison = a.compareTo(b);
+    return descending ? -comparison : comparison;
+  }
+
+  int _compareTasks(dynamic a, dynamic b) {
+    switch (_selectedSort) {
+      case 'Due date - earliest':
+        return _compareDate(a['dueDate'], b['dueDate']);
+      case 'Due date - latest':
+        return _compareDate(a['dueDate'], b['dueDate'], descending: true);
+      case 'Priority - high to low':
+        return (_priorityOrder[(b['priority'] ?? '').toString()] ?? 1)
+            .compareTo(_priorityOrder[(a['priority'] ?? '').toString()] ?? 1);
+      case 'Priority - low to high':
+        return (_priorityOrder[(a['priority'] ?? '').toString()] ?? 1)
+            .compareTo(_priorityOrder[(b['priority'] ?? '').toString()] ?? 1);
+      case 'Created - newest':
+        return _compareDate(a['createdAt'], b['createdAt'], descending: true);
+      case 'Created - oldest':
+        return _compareDate(a['createdAt'], b['createdAt']);
+      case 'Title - A to Z':
+        return (a['title'] ?? '').toString().toLowerCase()
+            .compareTo((b['title'] ?? '').toString().toLowerCase());
+      case 'Title - Z to A':
+        return (b['title'] ?? '').toString().toLowerCase()
+            .compareTo((a['title'] ?? '').toString().toLowerCase());
+      case 'Status':
+        return (_statusOrder[(a['status'] ?? '').toString()] ?? 99)
+            .compareTo(_statusOrder[(b['status'] ?? '').toString()] ?? 99);
+      default:
+        return 0;
+    }
+  }
+
+  void _sortWithinGroups(
+    Map<String?, List<dynamic>> grouped,
+    Map<String, int> originalOrder,
+  ) {
+    if (_selectedSort == 'Default') return;
+    for (final tasks in grouped.values) {
+      tasks.sort((a, b) {
+        final comparison = _compareTasks(a, b);
+        if (comparison != 0) return comparison;
+        // Dart's List.sort is not stable. Keep the existing API order for
+        // equal values rather than shuffling cards as tabs/search change.
+        return (originalOrder[a['id']?.toString()] ?? 0)
+            .compareTo(originalOrder[b['id']?.toString()] ?? 0);
+      });
+    }
+  }
+
+  String get _shortSortLabel {
+    switch (_selectedSort) {
+      case 'Due date - earliest': return 'Due ↑';
+      case 'Due date - latest': return 'Due ↓';
+      case 'Priority - high to low': return 'Priority ↓';
+      case 'Priority - low to high': return 'Priority ↑';
+      case 'Created - newest': return 'New ↑';
+      case 'Created - oldest': return 'Old ↑';
+      case 'Title - A to Z': return 'Title A-Z';
+      case 'Title - Z to A': return 'Title Z-A';
+      case 'Status': return 'Status';
+      default: return 'Default';
+    }
+  }
+
+  Widget _sortMenu() {
+    final p = _p;
+    return PopupMenuButton<String>(
+      tooltip: 'Sort tasks',
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 5),
+      initialValue: _selectedSort,
+      onSelected: (value) => setState(() => _selectedSort = value),
+      constraints: BoxConstraints(
+        minWidth: 250,
+        maxWidth: (MediaQuery.sizeOf(context).width - 28)
+            .clamp(250.0, 360.0).toDouble(),
+        maxHeight: MediaQuery.sizeOf(context).height * 0.67,
+      ),
+      color: p.card,
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(23),
+        side: BorderSide(color: p.cardBorder),
+      ),
+      itemBuilder: (context) {
+        final widgets = <PopupMenuEntry<String>>[];
+        for (var i = 0; i < _sortOptions.length; i++) {
+          if (const {3, 5, 7, 9}.contains(i)) {
+            widgets.add(PopupMenuDivider(height: 12));
+          }
+          final label = _sortOptions[i];
+          final selected = label == _selectedSort;
+          widgets.add(
+            PopupMenuItem<String>(
+              value: label,
+              height: 51,
+              padding: const EdgeInsets.symmetric(horizontal: 11),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: selected ? p.unreadBackground : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  border: selected
+                      ? Border.all(color: p.link.withValues(alpha: 0.14))
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: selected ? p.link : p.secondaryText,
+                          fontSize: 12.5,
+                          fontWeight: selected
+                              ? FontWeight.w800 : FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (selected)
+                      Icon(Icons.check_rounded, color: p.link, size: 19),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }
+        return widgets;
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.swap_vert_rounded, size: 17,
+              color: _selectedSort == 'Default' ? p.muted : p.link),
+          const SizedBox(width: 4),
+          Text(
+            _shortSortLabel,
+            style: TextStyle(
+              color: _selectedSort == 'Default' ? p.secondaryText : p.link,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _headerButton(String title, IconData icon, VoidCallback? onPressed, {bool primary = false}) {
@@ -251,27 +454,31 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ),
         ),
-        PopupMenuButton<int>(
-          tooltip: 'Existing status filters',
-          initialValue: _legacyStatusIndex,
+        PopupMenuButton<String>(
+          tooltip: 'Filter task status',
+          initialValue: _statusFilter ?? 'ALL',
           onSelected: _chooseLegacyStatus,
+          color: _p.card,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(17),
+            side: BorderSide(color: _p.cardBorder),
+          ),
           itemBuilder: (context) => const [
-            PopupMenuItem(value: 0, child: Text('All')),
-            PopupMenuItem(value: 1, child: Text('Open')),
-            PopupMenuItem(value: 2, child: Text('In Progress')),
-            PopupMenuItem(value: 3, child: Text('Completed')),
+            PopupMenuItem(value: 'ALL', child: Text('All statuses')),
+            PopupMenuItem(value: 'OPEN', child: Text('Open')),
+            PopupMenuItem(value: 'IN_PROGRESS', child: Text('In Progress')),
+            PopupMenuItem(value: 'COMPLETED', child: Text('Completed')),
           ],
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Icon(Icons.filter_list_rounded, size: 19, color: _p.secondaryText),
+            child: Icon(Icons.filter_list_rounded,
+              size: 19,
+              color: _statusFilter == null ? _p.secondaryText : _p.link,
+            ),
           ),
         ),
         const SizedBox(width: 8),
-        Icon(Icons.swap_vert_rounded, size: 17, color: _p.muted),
-        const SizedBox(width: 4),
-        Text('Default', style: TextStyle(
-          color: _p.secondaryText, fontSize: 11, fontWeight: FontWeight.w700,
-        )),
+        _sortMenu(),
         const SizedBox(width: 11),
       ]),
     ]),
@@ -309,16 +516,16 @@ class _TasksScreenState extends State<TasksScreen> {
       for (final group in _groups) group['id'].toString(): <dynamic>[],
       null: <dynamic>[],
     };
-    // Search only currently loaded tasks: no extra API calls or mutations.
+    // Category, optional status, and search are composed, not overridden.
+    // The original task list remains untouched for other views/refreshes.
     final query = _searchQuery.trim().toLowerCase();
-    final matchingTasks = query.isEmpty
-        ? _tasks
-        : _tasks.where((task) {
-            final title = (task['title'] ?? '').toString().toLowerCase();
-            final description =
-                (task['description'] ?? '').toString().toLowerCase();
-            return title.contains(query) || description.contains(query);
-          }).toList();
+    final matchingTasks = _tasks.where((task) {
+      if (!_matchesCategory(task) || !_matchesStatus(task)) return false;
+      if (query.isEmpty) return true;
+      final title = (task['title'] ?? '').toString().toLowerCase();
+      final description = (task['description'] ?? '').toString().toLowerCase();
+      return title.contains(query) || description.contains(query);
+    }).toList();
 
     // Use the full task set for parent lookups, even during search.
     final tasksById = {
@@ -332,10 +539,17 @@ class _TasksScreenState extends State<TasksScreen> {
       }
       groupedTasks[groupedTasks.containsKey(groupId) ? groupId : null]!.add(task);
     }
+    final originalOrder = <String, int>{
+      for (var i = 0; i < _tasks.length; i++)
+        if (_tasks[i]['id'] != null) _tasks[i]['id'].toString(): i,
+    };
+    _sortWithinGroups(groupedTasks, originalOrder);
     final keys = <String?>[..._groups.map((g) => g['id'].toString()), null];
-    final visibleKeys = query.isEmpty
-        ? keys
-        : keys.where((key) => groupedTasks[key]!.isNotEmpty).toList();
+    final hasFilters = query.isNotEmpty ||
+        _selectedView != 'All' || _statusFilter != null;
+    final visibleKeys = hasFilters
+        ? keys.where((key) => groupedTasks[key]!.isNotEmpty).toList()
+        : keys;
 
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

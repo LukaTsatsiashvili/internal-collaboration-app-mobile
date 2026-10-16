@@ -40,6 +40,10 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
   IO.Socket? _socket;
   Map<String, dynamic>? _task;
   XFile? _commentFile;
+  String? _commentFileId;
+  bool _uploadingCommentFile = false;
+  bool _attachingTaskFile = false;
+  int _loadEpoch = 0;
   String? _error;
   String? _downloadingFile;
   bool _loading = true;
@@ -75,7 +79,9 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
       void refreshIfCurrent(dynamic event) {
         if (!mounted || event is! Map) return;
         final id = event['taskId'] ?? event['id'];
-        if (id?.toString() == widget.taskId) _load(showSpinner: false);
+        if (id?.toString() == widget.taskId && !_updating && !_sendingComment) {
+          _load(showSpinner: false);
+        }
       }
       socket.on('task:comment-created', refreshIfCurrent);
       socket.on('task:updated', refreshIfCurrent);
@@ -87,6 +93,7 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
 
   @override
   void dispose() {
+    _loadEpoch++;
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
@@ -97,21 +104,24 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
   void _close() => Navigator.of(context).pop(_changed);
 
   Future<void> _load({bool showSpinner = true}) async {
-    if (showSpinner) setState(() => _loading = true);
+    final epoch = ++_loadEpoch;
+    if (showSpinner && mounted) setState(() => _loading = true);
     try {
       final task = await widget.service.getTaskDetails(widget.taskId);
-      if (!mounted) return;
+      if (!mounted || epoch != _loadEpoch) return;
       setState(() {
         _task = task;
         _error = null;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || epoch != _loadEpoch) return;
       setState(() {
         _error = error.toString().replaceFirst('Exception: ', '');
       });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && epoch == _loadEpoch) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -156,13 +166,27 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
 
   Future<void> _changeGroup(String? groupId) async {
     if (_updating || _task == null) return;
-    if (_task!['personalLayout']?['groupId']?.toString() == groupId) return;
+    final current = _task!['personalLayout'];
+    final currentGroup = current is Map ? current['groupId']?.toString() : null;
+    if (currentGroup == groupId) return;
     setState(() => _updating = true);
     try {
-      await widget.service.moveTaskToGroup(widget.taskId, groupId);
+      // Confirm the ID returned by the server before changing the visible
+      // value; do not silently treat a selected popup item as a saved group.
+      final saved = await widget.service.moveTaskToGroup(widget.taskId, groupId);
       if (!mounted) return;
-      _changed = true;
+      _loadEpoch++; // stale/socket fetches cannot overwrite this saved value
+      final updatedTask = Map<String, dynamic>.from(_task!);
+      updatedTask['personalLayout'] = saved;
+      setState(() {
+        _task = updatedTask;
+        _changed = true;
+      });
+      // Refresh history and other server-backed task fields.
       await _load(showSpinner: false);
+      if (mounted && _error != null) {
+        _message('ჯგუფი შენახულია; დეტალების განახლება ვერ მოხერხდა.');
+      }
     } catch (error) {
       _message(error.toString().replaceFirst('Exception: ', ''));
     } finally {
@@ -171,40 +195,89 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
   }
 
   Future<void> _pickCommentFile() async {
+    if (_sendingComment || _uploadingCommentFile) return;
     try {
       final selected = await openFile();
       if (!mounted || selected == null) return;
-      setState(() => _commentFile = selected);
+      // Selection is not an upload. Upload now and show a confirmed state.
+      setState(() {
+        _commentFile = selected;
+        _commentFileId = null;
+        _uploadingCommentFile = true;
+      });
+      final bytes = await selected.readAsBytes();
+      final id = await widget.service.uploadFileBytes(bytes, selected.name);
+      if (!mounted) return;
+      if (id == null) throw Exception('სერვერმა ატვირთვა ვერ დაადასტურა');
+      setState(() => _commentFileId = id);
+      _message('ფაილი აიტვირთა. კომენტარის გაგზავნისას მიემაგრება.');
     } catch (error) {
-      _message('ფაილის არჩევა ვერ მოხერხდა: ' + error.toString());
+      if (!mounted) return;
+      setState(() {
+        _commentFile = null;
+        _commentFileId = null;
+      });
+      _message('ფაილი ვერ აიტვირთა: ' + error.toString());
+    } finally {
+      if (mounted) setState(() => _uploadingCommentFile = false);
+    }
+  }
+
+  Future<void> _uploadFileToTask() async {
+    if (_attachingTaskFile || _task == null) return;
+    try {
+      final selected = await openFile();
+      if (!mounted || selected == null) return;
+      setState(() => _attachingTaskFile = true);
+      final bytes = await selected.readAsBytes();
+      final fileId = await widget.service.uploadFileBytes(bytes, selected.name);
+      if (fileId == null) throw Exception('სერვერმა ფაილის ატვირთვა ვერ დაადასტურა');
+      final existing = _list(_task?['attachments'])
+          .where((entry) => entry is Map)
+          .map((entry) => entry['fileId']?.toString() ??
+              (entry['file'] is Map
+                  ? entry['file']['id']?.toString() : null))
+          .whereType<String>()
+          .toList();
+      await widget.service.attachFileToTask(
+        widget.taskId, existingIds: existing, newFileId: fileId,
+      );
+      if (!mounted) return;
+      _changed = true;
+      await _load(showSpinner: false);
+      if (mounted) _message('ფაილი აიტვირთა და დავალებას მიემაგრა.');
+    } catch (error) {
+      _message('ფაილის მიმაგრება ვერ მოხერხდა: ' +
+          error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _attachingTaskFile = false);
     }
   }
 
   Future<void> _sendComment() async {
-    if (_sendingComment || _commentController.text.trim().isEmpty) {
-      if (_commentController.text.trim().isEmpty) {
-        _message('კომენტარის ტექსტი სავალდებულოა.');
-      }
+    if (_sendingComment || _uploadingCommentFile) return;
+    if (_commentController.text.trim().isEmpty) {
+      _message('კომენტარის ტექსტი სავალდებულოა.');
+      return;
+    }
+    if (_commentFile != null && _commentFileId == null) {
+      _message('ფაილის ატვირთვის დასრულებას დაელოდეთ.');
       return;
     }
     setState(() => _sendingComment = true);
     try {
-      final ids = <String>[];
-      if (_commentFile != null) {
-        final file = _commentFile!;
-        final bytes = await file.readAsBytes();
-        final uploaded = await widget.service.uploadFileBytes(bytes, file.name);
-        if (uploaded == null) throw Exception('ფაილის ატვირთვა ვერ მოხერხდა');
-        ids.add(uploaded);
-      }
       await widget.service.addTaskComment(
         widget.taskId,
         content: _commentController.text.trim(),
-        attachmentIds: ids,
+        attachmentIds: _commentFileId == null
+            ? const [] : [_commentFileId!],
       );
       if (!mounted) return;
       _commentController.clear();
-      setState(() => _commentFile = null);
+      setState(() {
+        _commentFile = null;
+        _commentFileId = null;
+      });
       _changed = true;
       await _load(showSpinner: false);
     } catch (error) {
@@ -849,11 +922,22 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
           Row(children: [
             Expanded(
               child: TextButton.icon(
-                onPressed: _sendingComment ? null : _pickCommentFile,
+                onPressed: (_sendingComment || _uploadingCommentFile)
+                    ? null : _pickCommentFile,
                 style: TextButton.styleFrom(alignment: Alignment.centerLeft),
-                icon: Icon(Icons.attach_file_rounded,
-                    color: _p.link, size: 16),
-                label: Text(_commentFile?.name ?? 'Attach a file',
+                icon: _uploadingCommentFile
+                    ? const SizedBox(height: 16, width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : Icon(
+                        _commentFileId != null
+                            ? Icons.cloud_done_outlined
+                            : Icons.attach_file_rounded,
+                        color: _p.link, size: 16),
+                label: Text(_uploadingCommentFile
+                    ? 'Uploading...'
+                    : _commentFileId != null
+                        ? 'Uploaded: ' + (_commentFile?.name ?? '')
+                        : 'Attach a file',
                   maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: _p.secondaryText,
                       fontSize: 10.5)),
@@ -869,7 +953,7 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
                 ]),
               ),
               child: TextButton(
-                onPressed: _sendingComment ? null : _sendComment,
+                onPressed: (_sendingComment || _uploadingCommentFile) ? null : _sendComment,
                 child: _sendingComment
                     ? const SizedBox(width: 16, height: 16,
                         child: CircularProgressIndicator(
@@ -883,6 +967,30 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
         ],
       ),
     );
+  }
+
+  String _historyDescription(dynamic event) {
+    final date = _date(event['createdAt']);
+    final author = _name(event['actor']);
+    if (event['actionType'] == 'PERSONAL_GROUP_CHANGED') {
+      final oldValue = event['oldValue'];
+      final newValue = event['newValue'];
+      final oldId = oldValue is Map ? oldValue['groupId']?.toString() : null;
+      final newId = newValue is Map ? newValue['groupId']?.toString() : null;
+      String groupName(String? id) {
+        if (id == null) return 'Ungrouped';
+        for (final group in widget.groups) {
+          if (group['id']?.toString() == id) {
+            return (group['name'] ?? '').toString();
+          }
+        }
+        return 'Previous group';
+      }
+      return date + ' · ' + author + ' · My group: ' +
+          groupName(oldId) + ' → ' + groupName(newId);
+    }
+    return date + ' · ' + author + ' · ' +
+        _human((event['actionType'] ?? '').toString());
   }
 
   Widget _history(Map<String, dynamic> task) {
@@ -919,9 +1027,7 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
                     : events.map((event) => Padding(
                         padding: const EdgeInsets.only(bottom: 9),
                         child: Text(
-                          _date(event['createdAt']) + ' · ' +
-                              _name(event['actor']) + ' · ' +
-                              _human((event['actionType'] ?? '').toString()),
+                          _historyDescription(event),
                           style: TextStyle(color: _p.secondaryText,
                               fontSize: 10.5),
                         ),
@@ -998,10 +1104,22 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
           const SizedBox(height: 16),
           _subtasks(task),
         ],
-        if (_list(task['attachments']).isNotEmpty) ...[
-          const SizedBox(height: 19),
-          _attachments(_list(task['attachments'])),
-        ],
+        const SizedBox(height: 19),
+        Row(children: [
+          Expanded(child: Text('ATTACHMENT', style: TextStyle(
+            color: _p.muted, fontSize: 11,
+            fontWeight: FontWeight.w800))),
+          TextButton.icon(
+            onPressed: _attachingTaskFile ? null : _uploadFileToTask,
+            icon: _attachingTaskFile
+                ? const SizedBox(width: 15, height: 15,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : Icon(Icons.add_rounded, color: _p.link, size: 17),
+            label: Text(_attachingTaskFile ? 'Uploading...' : 'Upload file',
+              style: TextStyle(color: _p.link, fontSize: 11)),
+          ),
+        ]),
+        _attachments(_list(task['attachments']), insideComment: true),
         const SizedBox(height: 16),
         _discussion(task),
         const SizedBox(height: 13),

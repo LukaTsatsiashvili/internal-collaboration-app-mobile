@@ -263,17 +263,13 @@ List<Widget> buildGlobalActions(
             ),
           ],
         ),
-        child: IconButton(
-          tooltip: 'შეტყობინებები',
-          padding: EdgeInsets.zero,
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+        child: NotificationBellButton(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
           },
-          icon: Icon(
-            Icons.notifications_none_rounded,
-            color: palette.ink,
-            size: 22,
-          ),
         ),
       ),
     ),

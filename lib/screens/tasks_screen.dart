@@ -4,6 +4,8 @@ import '../core/theme/app_theme_extensions.dart';
 
 import 'task_group_dialog.dart';
 import 'task_create_sheet.dart';
+import 'task_filter_dialog.dart';
+import 'task_advanced_filters.dart';
 
 import '../features/tasks/data/task_service.dart';
 
@@ -18,7 +20,7 @@ class _TasksScreenState extends State<TasksScreen> {
   final TaskService _taskService = TaskService();
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String? _statusFilter;
+  TaskAdvancedFilters _advancedFilters = TaskAdvancedFilters();
   String? _currentUserId;
   String _selectedSort = 'Default';
 
@@ -155,12 +157,61 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  bool _matchesStatus(dynamic task) =>
-      _statusFilter == null ||
-      (task['status'] ?? '').toString().toUpperCase() == _statusFilter;
+  List<dynamic> _filterPeople() {
+    // Identical to the web Tasks page: people already mentioned in any
+    // accessible task. No separate users.read permission is needed.
+    final people = <String, dynamic>{};
+    for (final task in _tasks) {
+      for (final person in [task['creator'], task['assignee']]) {
+        if (person is Map && person['id'] != null) {
+          people[person['id'].toString()] = person;
+        }
+      }
+      final participants = task['participants'];
+      if (participants is List) {
+        for (final participant in participants) {
+          if (participant is Map && participant['user'] is Map) {
+            final user = participant['user'];
+            if (user['id'] != null) {
+              people[user['id'].toString()] = user;
+            }
+          }
+        }
+      }
+    }
+    final list = people.values.toList();
+    list.sort((a, b) => (a['displayName'] ?? a['email'] ?? '')
+        .toString().toLowerCase().compareTo(
+        (b['displayName'] ?? b['email'] ?? '').toString().toLowerCase()));
+    return list;
+  }
 
-  void _chooseLegacyStatus(String value) {
-    setState(() => _statusFilter = value == 'ALL' ? null : value);
+  List<dynamic> _filterDepartments() {
+    final values = <String, dynamic>{};
+    for (final task in _tasks) {
+      final department = task['department'];
+      if (department is Map && department['id'] != null) {
+        values[department['id'].toString()] = department;
+      }
+    }
+    final list = values.values.toList();
+    list.sort((a, b) => (a['name'] ?? '').toString().toLowerCase()
+        .compareTo((b['name'] ?? '').toString().toLowerCase()));
+    return list;
+  }
+
+  Future<void> _openAdvancedFilters() async {
+    final selection = await showDialog<TaskAdvancedFilters>(
+      context: context,
+      builder: (context) => TaskFilterDialog(
+        initial: _advancedFilters,
+        people: _filterPeople(),
+        groups: _groups,
+        departments: _filterDepartments(),
+      ),
+    );
+    if (!mounted || selection == null) return;
+    setState(() => _advancedFilters = selection);
   }
 
   int _compareDate(dynamic first, dynamic second, {bool descending = false}) {
@@ -478,27 +529,31 @@ class _TasksScreenState extends State<TasksScreen> {
             ),
           ),
         ),
-        PopupMenuButton<String>(
-          tooltip: 'Filter task status',
-          initialValue: _statusFilter ?? 'ALL',
-          onSelected: _chooseLegacyStatus,
-          color: _p.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(17),
-            side: BorderSide(color: _p.cardBorder),
-          ),
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'ALL', child: Text('All statuses')),
-            PopupMenuItem(value: 'OPEN', child: Text('Open')),
-            PopupMenuItem(value: 'IN_PROGRESS', child: Text('In Progress')),
-            PopupMenuItem(value: 'COMPLETED', child: Text('Completed')),
-          ],
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Icon(Icons.filter_list_rounded,
-              size: 19,
-              color: _statusFilter == null ? _p.secondaryText : _p.link,
-            ),
+        IconButton(
+          tooltip: 'Filter tasks',
+          onPressed: _openAdvancedFilters,
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(Icons.filter_list_rounded,
+                size: 19,
+                color: _advancedFilters.activeCount == 0
+                    ? _p.secondaryText : _p.link,
+              ),
+              if (_advancedFilters.activeCount > 0)
+                Positioned(
+                  right: -5, top: -5,
+                  child: Container(
+                    width: 8, height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
         const SizedBox(width: 8),
@@ -540,28 +595,30 @@ class _TasksScreenState extends State<TasksScreen> {
       for (final group in _groups) group['id'].toString(): <dynamic>[],
       null: <dynamic>[],
     };
-    // Category, optional status, and search are composed, not overridden.
-    // The original task list remains untouched for other views/refreshes.
+    // Compose quick tab, advanced filters, and text search. For subtasks,
+    // the parent's personal group is used just like in the web Tasks page.
     final query = _searchQuery.trim().toLowerCase();
-    final matchingTasks = _tasks.where((task) {
-      if (!_matchesCategory(task) || !_matchesStatus(task)) return false;
-      if (query.isEmpty) return true;
-      final title = (task['title'] ?? '').toString().toLowerCase();
-      final description = (task['description'] ?? '').toString().toLowerCase();
-      return title.contains(query) || description.contains(query);
-    }).toList();
-
-    // Use the full task set for parent lookups, even during search.
     final tasksById = {
       for (final task in _tasks) task['id']?.toString(): task,
     };
-    for (final task in matchingTasks) {
+    for (final task in _tasks) {
       String? groupId = task['personalLayout']?['groupId']?.toString();
       if (groupId == null && task['parentTaskId'] != null) {
         final parent = tasksById[task['parentTaskId']?.toString()];
         groupId = parent?['personalLayout']?['groupId']?.toString();
       }
-      groupedTasks[groupedTasks.containsKey(groupId) ? groupId : null]!.add(task);
+
+      if (!_matchesCategory(task) ||
+          !_advancedFilters.matches(task, effectiveGroupId: groupId)) {
+        continue;
+      }
+      if (query.isNotEmpty) {
+        final title = (task['title'] ?? '').toString().toLowerCase();
+        final description = (task['description'] ?? '').toString().toLowerCase();
+        if (!title.contains(query) && !description.contains(query)) continue;
+      }
+      groupedTasks[groupedTasks.containsKey(groupId) ? groupId : null]!
+          .add(task);
     }
     final originalOrder = <String, int>{
       for (var i = 0; i < _tasks.length; i++)
@@ -570,7 +627,7 @@ class _TasksScreenState extends State<TasksScreen> {
     _sortWithinGroups(groupedTasks, originalOrder);
     final keys = <String?>[..._groups.map((g) => g['id'].toString()), null];
     final hasFilters = query.isNotEmpty ||
-        _selectedView != 'All' || _statusFilter != null;
+        _selectedView != 'All' || _advancedFilters.activeCount > 0;
     final visibleKeys = hasFilters
         ? keys.where((key) => groupedTasks[key]!.isNotEmpty).toList()
         : keys;

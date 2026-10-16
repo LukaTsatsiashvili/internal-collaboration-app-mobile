@@ -164,22 +164,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (difference == 0) {
       final hour = timestamp.hour % 12 == 0 ? 12 : timestamp.hour % 12;
       final minute = timestamp.minute.toString().padLeft(2, '0');
-      return hour.toString() +
-          ':' +
-          minute +
-          (timestamp.hour >= 12 ? ' PM' : ' AM');
+      return '$hour:$minute${timestamp.hour >= 12 ? ' PM' : ' AM'}';
     }
     if (difference == 1) return 'Yesterday';
     const months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
     ];
-    final label = months[timestamp.month - 1] +
-        ' ' +
-        timestamp.day.toString();
+    final label = '${months[timestamp.month - 1]} ${timestamp.day}';
     return timestamp.year == now.year
         ? label
-        : label + ', ' + timestamp.year.toString();
+        : '$label, ${timestamp.year}';
   }
 
   String _initials(String name) {
@@ -252,7 +247,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _chats.length.toString() + ' active conversations',
+                  '${_chats.length} active conversations',
                   style: TextStyle(
                     color: _secondaryText,
                     fontSize: 11,

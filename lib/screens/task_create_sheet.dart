@@ -179,7 +179,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         DropdownButtonFormField<String>(
-                          value: _assigneeId,
+                          initialValue: _assigneeId,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             labelText: 'Assigned to',
@@ -248,7 +248,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _priority,
+                  initialValue: _priority,
                   decoration: const InputDecoration(
                     labelText: 'Priority',
                     border: OutlineInputBorder(),
@@ -265,7 +265,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _groupId,
+                  initialValue: _groupId,
                   isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Group',

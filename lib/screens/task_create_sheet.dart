@@ -307,8 +307,19 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
             style: TextStyle(color: p.hintText, fontSize: 13),
           );
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
+    // Apply these overrides only to dropdown triggers and their popup routes.
+    // PopupMenuButton captures the surrounding inherited Theme for its menu,
+    // so both the closed field and menu options lose splash/hover highlights.
+    return Theme(
+      data: Theme.of(context).copyWith(
+        splashFactory: NoSplash.splashFactory,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
         final menuWidth = constraints.maxWidth;
         final menuHeight = (MediaQuery.sizeOf(context).height * 0.38)
             .clamp(150.0, 320.0)
@@ -381,8 +392,9 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
               ],
             ),
           ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

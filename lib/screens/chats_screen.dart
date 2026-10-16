@@ -1632,6 +1632,9 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
   final ChatService _chatService = ChatService();
   final TextEditingController _groupNameController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  // Independent search terms prevent Direct/Group switching from resetting filters.
+  final TextEditingController _directSearchController =
+      TextEditingController();
 
   bool _isGroup = false;
   bool _isLoadingUsers = true;
@@ -1641,6 +1644,7 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
   String? _selectedUserId;
   final List<String> _selectedUserIds = [];
   String _memberQuery = '';
+  String _directQuery = '';
 
   @override
   void initState() {
@@ -1664,6 +1668,7 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
   void dispose() {
     _groupNameController.dispose();
     _searchController.dispose();
+    _directSearchController.dispose();
     super.dispose();
   }
 
@@ -1782,6 +1787,16 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
     }).toList();
   }
 
+  List<dynamic> get _visibleDirectMembers {
+    final query = _directQuery.toLowerCase().trim();
+    if (query.isEmpty) return _users;
+    return _users.where((user) {
+      return _name(user).toLowerCase().contains(query) ||
+          _subtitle(user).toLowerCase().contains(query) ||
+          (user['email'] ?? '').toString().toLowerCase().contains(query);
+    }).toList();
+  }
+
   Widget _label(String title) => Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(
@@ -1881,33 +1896,58 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _label('PERSON'),
-        _isLoadingUsers
-            ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: CircularProgressIndicator(),
-                ),
-              )
-            : DropdownButtonFormField<String>(
-                initialValue: _selectedUserId,
-                isExpanded: true,
-                dropdownColor: p.card,
-                style: TextStyle(
-                  color: p.ink,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-                icon: Icon(Icons.keyboard_arrow_down_rounded, color: p.muted),
-                decoration: _field('Choose a colleague'),
-                items: _users.map<DropdownMenuItem<String>>((user) {
-                  return DropdownMenuItem<String>(
-                    value: user['id'],
-                    child: Text(_name(user), overflow: TextOverflow.ellipsis),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => _selectedUserId = value),
+        Row(
+          children: [
+            Expanded(child: _label('PERSON')),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: p.unreadBackground,
+                borderRadius: BorderRadius.circular(14),
               ),
+              child: Text(
+                _selectedUserId == null ? '0 Selected' : '1 Selected',
+                style: TextStyle(
+                  color: p.link,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        TextField(
+          controller: _directSearchController,
+          onChanged: (query) => setState(() => _directQuery = query),
+          style: TextStyle(color: p.ink, fontSize: 12),
+          textInputAction: TextInputAction.search,
+          decoration: _field(
+            'Search colleagues...',
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 19,
+              color: p.searchIcon,
+            ),
+            suffixIcon: _directQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Clear search',
+                    onPressed: () {
+                      _directSearchController.clear();
+                      setState(() => _directQuery = '');
+                    },
+                    icon: Icon(
+                      Icons.close_rounded,
+                      size: 17,
+                      color: p.muted,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 9),
+        // Reuse the Group member list layout, with single selection enabled.
+        _memberList(singleSelection: true),
       ],
     );
   }
@@ -1978,9 +2018,9 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
     );
   }
 
-  Widget _memberList() {
+  Widget _memberList({bool singleSelection = false}) {
     final p = _colors;
-    final visible = _visibleMembers;
+    final visible = singleSelection ? _visibleDirectMembers : _visibleMembers;
     final height = (MediaQuery.sizeOf(context).height * 0.26)
         .clamp(120.0, 220.0)
         .toDouble();
@@ -1997,7 +2037,7 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
           : visible.isEmpty
               ? Center(
                   child: Text(
-                    _memberQuery.isEmpty
+                    (singleSelection ? _directQuery : _memberQuery).isEmpty
                         ? 'No colleagues found'
                         : 'No matching colleagues',
                     style: TextStyle(color: p.muted, fontSize: 12),
@@ -2018,7 +2058,9 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
                     final user = visible[index];
                     final userId = user['id'] as String;
                     final name = _name(user);
-                    final selected = _selectedUserIds.contains(userId);
+                    final selected = singleSelection
+                        ? _selectedUserId == userId
+                        : _selectedUserIds.contains(userId);
                     final paletteIndex = userId.codeUnits.fold<int>(
                       0,
                       (sum, code) => sum + code,
@@ -2034,7 +2076,10 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
                       child: InkWell(
                         onTap: () {
                           setState(() {
-                            if (selected) {
+                            if (singleSelection) {
+                              // Exactly zero or one selected colleague.
+                              _selectedUserId = selected ? null : userId;
+                            } else if (selected) {
                               _selectedUserIds.remove(userId);
                             } else {
                               _selectedUserIds.add(userId);

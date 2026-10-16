@@ -12,7 +12,10 @@ import '../core/theme/app_theme_extensions.dart';
 
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key});
+  const NotificationsScreen({super.key, this.service});
+
+  /// Optional injection for isolated widget tests.
+  final NotificationService? service;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -20,7 +23,7 @@ class NotificationsScreen extends StatefulWidget {
 
 class _NotificationsScreenState extends State<NotificationsScreen>
     with WidgetsBindingObserver {
-  final NotificationService _service = NotificationService();
+  late final NotificationService _service;
   List<Map<String, dynamic>> _items = [];
   int _unreadCount = 0;
   int _requestVersion = 0;
@@ -43,6 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   @override
   void initState() {
     super.initState();
+    _service = widget.service ?? NotificationService();
     WidgetsBinding.instance.addObserver(this);
     _load();
     _connect();
@@ -288,8 +292,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             padding: const EdgeInsets.only(right: 13),
             child: Center(
               child: TextButton(
-                // Preserve the existing no-op action.
-                onPressed: _markingAll || _unreadCount == 0 ? null : _readAll,
+                 onPressed: _markingAll || _unreadCount == 0 ? null : _readAll,
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 33),
                   padding: const EdgeInsets.symmetric(horizontal: 13),
@@ -416,7 +419,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     return GestureDetector(
       onTap: onTap,
       child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
       decoration: BoxDecoration(
         color: selected ? AppColors.primary : palette.card,
         borderRadius: BorderRadius.circular(22),
@@ -464,7 +467,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       onTap: onTap,
       onLongPress: onLongPress,
       child: Container(
-      width: double.infinity,
+        width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 15, 13, 15),
       decoration: BoxDecoration(
         color: palette.card,

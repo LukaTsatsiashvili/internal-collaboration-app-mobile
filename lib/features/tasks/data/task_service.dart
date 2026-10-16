@@ -30,6 +30,23 @@ class TaskService {
     return [];
   }
 
+  // Use the authenticated session, not a display name/role, for personal tabs.
+  Future<String> getCurrentUserId() async {
+    try {
+      final response = await _apiClient.dio.get('/auth/me');
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        final id = response.data['data']?['id']?.toString();
+        if (id != null && id.isNotEmpty) return id;
+      }
+    } on DioException catch (e) {
+      throw Exception(
+        e.response?.data?['error']?['message'] ??
+            'ვერ მოხერხდა მომხმარებლის იდენტიფიცირება',
+      );
+    }
+    throw Exception('ვერ მოხერხდა მომხმარებლის იდენტიფიცირება');
+  }
+
   // Personal task groups belong to the signed-in user, not a department.
   Future<List<dynamic>> getTaskGroups() async {
     try {

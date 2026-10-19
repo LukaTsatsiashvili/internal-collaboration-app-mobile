@@ -209,6 +209,7 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
           value: option.key,
           child: Row(children: [
             Expanded(child: Text(option.value,
+              maxLines: 1, overflow: TextOverflow.ellipsis,
               style: TextStyle(color: _p.secondaryText, fontSize: 12))),
             if (option.value == selectedLabel)
               Icon(Icons.check_rounded, size: 17, color: _p.link),

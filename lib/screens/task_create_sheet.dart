@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 
 import '../features/tasks/data/task_service.dart';
 
@@ -310,14 +311,7 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
     // Apply these overrides only to dropdown triggers and their popup routes.
     // PopupMenuButton captures the surrounding inherited Theme for its menu,
     // so both the closed field and menu options lose splash/hover highlights.
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashFactory: NoSplash.splashFactory,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-        focusColor: Colors.transparent,
-      ),
+    return AppDropdownTheme(
       child: LayoutBuilder(
         builder: (context, constraints) {
         final menuWidth = constraints.maxWidth;
@@ -328,14 +322,12 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
         return PopupMenuButton<int>(
           tooltip: hint ?? 'Choose option',
           position: PopupMenuPosition.under,
-          offset: const Offset(0, 5),
+          offset: AppDropdownTheme.menuGap,
           padding: EdgeInsets.zero,
           elevation: 12,
           color: p.card,
-          constraints: BoxConstraints(
-            minWidth: menuWidth,
-            maxWidth: menuWidth,
-            maxHeight: menuHeight,
+          constraints: AppDropdownTheme.menuBounds(
+            menuWidth, menuHeight,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(19),

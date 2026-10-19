@@ -5,6 +5,15 @@ import 'package:gtex_collab_app/features/approvals/data/approval_service.dart';
 import 'package:gtex_collab_app/screens/approvals_screen.dart';
 
 class FakeApprovalService extends ApprovalService {
+  final List<String> createdGroups = [];
+
+  @override
+  Future<Map<String, dynamic>> createApprovalGroup({required String name}) async {
+    createdGroups.add(name);
+    return {'id': 'new-${createdGroups.length}', 'name': name,
+      'position': 3000};
+  }
+
   @override
   Future<List<dynamic>> getApprovalRequests({String? status}) async => [
         {
@@ -42,6 +51,9 @@ class FakeApprovalService extends ApprovalService {
   Future<List<dynamic>> getApprovalGroups() async => [
         {'id': 'group-1', 'name': 'My reviews', 'position': 1000},
         {'id': 'group-2', 'name': 'Archive', 'position': 2000},
+        for (var i = 0; i < createdGroups.length; i++)
+          {'id': 'new-${i + 1}', 'name': createdGroups[i],
+            'position': 3000 + i},
       ];
 
   @override
@@ -145,6 +157,29 @@ void main() {
     await tester.tap(find.text('Request type · A to Z'));
     await tester.pumpAndSettle();
     expect(find.text('Type A-Z'), findsOneWidget);
+  });
+
+  testWidgets('New group reuses Tasks modal and creates approval group',
+      (tester) async {
+    final service = FakeApprovalService();
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: ApprovalsScreen(service: service),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Approval bases'), findsNothing);
+
+    await tester.ensureVisible(find.text('New group'));
+    await tester.tap(find.text('New group'));
+    await tester.pumpAndSettle();
+    expect(find.text('Group name'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField).last, 'Team reviews');
+    await tester.tap(find.text('Create group'));
+    await tester.pumpAndSettle();
+
+    expect(service.createdGroups, ['Team reviews']);
+    expect(find.text('Team reviews'), findsOneWidget);
   });
 
 }

@@ -135,7 +135,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       elevation: 0,
       clipBehavior: Clip.none,
       builder: (_) => ApprovalDetailsSheet(
-        requestId: id, service: _approvalService,
+        requestId: id,
+        service: _approvalService,
+        onChanged: () {
+          if (mounted) _fetchApprovals();
+        },
       ),
     );
     if (mounted && changed == true) await _fetchApprovals();

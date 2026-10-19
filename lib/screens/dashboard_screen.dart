@@ -353,14 +353,19 @@ class _DashboardScreenState extends State<DashboardScreen>
               color: palette.ink, fontSize: 17,
               fontWeight: FontWeight.w800, letterSpacing: -0.35,
             ))),
-            TextButton.icon(
+            TextButton(
               key: const ValueKey('dashboard-open-inbox'),
               onPressed: () => _openInbox(),
-              label: const Text('Open inbox', style: TextStyle(
-                fontSize: 11.5, fontWeight: FontWeight.w800,
-              )),
-              icon: const Icon(Icons.chevron_right_rounded, size: 18),
-              iconAlignment: IconAlignment.end,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Open inbox', style: TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w800,
+                  )),
+                  SizedBox(width: 3),
+                  Icon(Icons.chevron_right_rounded, size: 18),
+                ],
+              ),
               style: TextButton.styleFrom(
                 foregroundColor: palette.link,
                 padding: const EdgeInsets.symmetric(horizontal: 4),

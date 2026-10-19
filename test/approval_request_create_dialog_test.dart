@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gtex_collab_app/core/theme/app_theme_extensions.dart';
@@ -7,7 +10,17 @@ import 'package:gtex_collab_app/screens/approval_request_create_dialog.dart';
 class FakeApprovalRequestService extends ApprovalService {
   final saved = <Map<String, dynamic>>[];
   int uploads = 0;
+  String? uploadedName;
   int typeFetches = 0;
+
+  @override
+  Future<String> uploadApprovalAttachment(
+      List<int> bytes, String fileName) async {
+    uploads++;
+    uploadedName = fileName;
+    expect(bytes, [65, 66, 67]);
+    return 'uploaded-file-1';
+  }
 
   @override
   Future<List<dynamic>> getApprovalTypes() async {
@@ -50,7 +63,9 @@ class FakeApprovalRequestService extends ApprovalService {
 }
 
 Future<void> openNewRequest(
-    WidgetTester tester, FakeApprovalRequestService service) async {
+    WidgetTester tester, FakeApprovalRequestService service, {
+    Future<XFile?> Function()? filePicker,
+  }) async {
   await tester.pumpWidget(MaterialApp(
     theme: ThemeData(extensions: const [AppPalette.light]),
     home: Scaffold(body: Builder(
@@ -58,7 +73,10 @@ Future<void> openNewRequest(
         child: const Text('Open New Request'),
         onPressed: () => showDialog<bool>(
           context: context,
-          builder: (_) => ApprovalRequestCreateDialog(service: service),
+          builder: (_) => ApprovalRequestCreateDialog(
+            service: service,
+            filePicker: filePicker,
+          ),
         ),
       )),
     )),
@@ -121,4 +139,34 @@ void main() {
     expect(service.saved.first['data']['reason'], 'Workstation purchase');
     expect(service.saved.first['data']['amount'], 1599.25);
   });
+  testWidgets('attachment bytes upload before creating the approval request',
+      (tester) async {
+    final service = FakeApprovalRequestService();
+    await openNewRequest(tester, service, filePicker: () async =>
+        XFile.fromData(
+          Uint8List.fromList([65, 66, 67]),
+          name: 'approval.txt',
+          mimeType: 'text/plain',
+        ));
+    await tester.tap(find.byTooltip('Choose request type'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Budget request').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('new-approval-request-title')), 'Budget draft');
+
+    final chooseFile = find.text('Choose file');
+    await tester.ensureVisible(chooseFile);
+    await tester.tap(chooseFile);
+    await tester.pumpAndSettle();
+    expect(find.text('approval.txt'), findsOneWidget);
+    await tester.tap(find.text('Save draft'));
+    await tester.pumpAndSettle();
+
+    expect(service.uploads, 1);
+    expect(service.uploadedName, 'approval.txt');
+    expect(service.saved, hasLength(1));
+    expect(service.saved.single['attachmentIds'], ['uploaded-file-1']);
+  });
+
 }

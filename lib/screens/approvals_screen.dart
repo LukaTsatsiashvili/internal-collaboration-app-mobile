@@ -5,6 +5,8 @@ import '../core/theme/app_theme_extensions.dart';
 import '../features/approvals/data/approval_service.dart';
 import 'approval_advanced_filters.dart';
 import 'approval_filter_dialog.dart';
+import 'task_group_dialog.dart';
+import 'request_types_sheet.dart';
 
 class ApprovalsScreen extends StatefulWidget {
   const ApprovalsScreen({super.key, this.focusRequestId, this.service});
@@ -32,6 +34,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   List<String> _groupOrder = [];
   int _loadVersion = 0;
   
+  bool _isCreatingGroup = false;
   bool _isLoading = true;
   List<dynamic> _requests = [];
   String? _errorMessage;
@@ -239,12 +242,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     ));
   }
 
-  Widget _actionButton(String title, IconData icon, {bool primary = false}) {
+  Widget _actionButton(String title, IconData icon, {
+    bool primary = false,
+    VoidCallback? onPressed,
+  }) {
     final p = _p;
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => _unavailable(title),
+        onTap: onPressed ?? () => _unavailable(title),
         borderRadius: BorderRadius.circular(17),
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -307,6 +313,73 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     ]),
   );
 
+  Future<void> _openRequestTypesSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.48),
+      elevation: 0,
+      clipBehavior: Clip.none,
+      builder: (_) => RequestTypesSheet(service: _approvalService),
+    );
+  }
+
+  Future<void> _showNewGroupDialog() async {
+    if (_isCreatingGroup) return;
+    // Reuse the same modal and validation as the Tasks screen.
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => const TaskGroupDialog(),
+    );
+    if (!mounted || name == null || _isCreatingGroup) return;
+
+    setState(() => _isCreatingGroup = true);
+    try {
+      final created = await _approvalService.createApprovalGroup(name: name);
+      if (!mounted) return;
+      final id = created['id']?.toString();
+      if (id != null && id.isNotEmpty &&
+          !_groups.any((g) => g is Map && g['id']?.toString() == id)) {
+        setState(() {
+          _groups = [..._groups, created];
+          _groupOrder = [..._groupOrder, id];
+        });
+      }
+      // Synchronize the newly created group from the server without
+      // discarding the current quick filters, search, or list state.
+      try {
+        final groups = await _approvalService.getApprovalGroups();
+        if (!mounted) return;
+        final serverIds = groups.whereType<Map>()
+            .map((g) => g['id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty).toList();
+        setState(() {
+          _groups = groups;
+          _groupOrder = [
+            ..._groupOrder.where(serverIds.contains),
+            ...serverIds.where((id) => !_groupOrder.contains(id)),
+          ];
+        });
+      } catch (_) {
+        // The successful POST response is sufficient to render the group.
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ჯგუფი წარმატებით შეიქმნა')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _isCreatingGroup = false);
+    }
+  }
+
   Widget _actions() => SizedBox(
     height: 54,
     child: ListView(
@@ -316,11 +389,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       children: [
         _actionButton('New request', Icons.add_rounded, primary: true),
         const SizedBox(width: 7),
-        _actionButton('Request types', Icons.tune_rounded),
+        _actionButton('Request types', Icons.tune_rounded,
+          onPressed: () { _openRequestTypesSheet(); }),
         const SizedBox(width: 7),
-        _actionButton('New group', Icons.create_new_folder_outlined),
-        const SizedBox(width: 7),
-        _actionButton('Approval bases', Icons.table_chart_outlined),
+        _actionButton('New group', Icons.create_new_folder_outlined,
+          onPressed: () { _showNewGroupDialog(); }),
       ],
     ),
   );

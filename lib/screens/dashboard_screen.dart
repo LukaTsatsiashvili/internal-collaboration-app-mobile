@@ -2,13 +2,20 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/dashboard/data/dashboard_service.dart';
+import '../features/notifications/data/notification_service.dart';
+import 'notifications_screen.dart';
 import 'main_navigation.dart';
+
+enum DashboardQuickAction { task, request, conversation }
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback onToggleTheme;
   final VoidCallback onChangeLanguage;
   final String currentLanguage;
   final ThemeMode currentThemeMode;
+  final void Function(DashboardQuickAction action)? onQuickAction;
+  final DashboardService? dashboardService;
+  final NotificationService? notificationService;
 
   const DashboardScreen({
     super.key,
@@ -16,14 +23,25 @@ class DashboardScreen extends StatefulWidget {
     required this.onChangeLanguage,
     required this.currentLanguage,
     required this.currentThemeMode,
+    this.onQuickAction,
+    this.dashboardService,
+    this.notificationService,
   });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
-  final DashboardService _dashboardService = DashboardService();
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late final DashboardService _dashboardService;
+  late final NotificationService _notificationService;
+  late final AnimationController _unreadPulse;
+  late final Animation<double> _pulseOpacity;
+  List<Map<String, dynamic>> _latestUpdates = [];
+  bool _updatesLoading = true;
+  String? _updatesError;
+  int _updatesVersion = 0;
 
   bool _isLoading = true;
   String _userName = 'მომხმარებელი';
@@ -33,7 +51,88 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    _dashboardService = widget.dashboardService ?? DashboardService();
+    _notificationService = widget.notificationService ?? NotificationService();
+    _unreadPulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1150),
+    );
+    _pulseOpacity = Tween<double>(begin: 0.48, end: 1.0).animate(
+      CurvedAnimation(parent: _unreadPulse, curve: Curves.easeInOut),
+    );
+    WidgetsBinding.instance.addObserver(this);
     _loadDashboardData();
+    _loadUpdates();
+    _connectUpdates();
+  }
+
+  Future<void> _connectUpdates() async {
+    try {
+      await _notificationService.connect(() {
+        if (mounted) _loadUpdates(silent: true);
+      });
+    } catch (_) {
+      // The dashboard is still usable if the realtime socket is unavailable.
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _loadUpdates(silent: true);
+  }
+
+  @override
+  void dispose() {
+    _updatesVersion++;
+    WidgetsBinding.instance.removeObserver(this);
+    _notificationService.disposeSocket();
+    _unreadPulse.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUpdates({bool silent = false}) async {
+    final version = ++_updatesVersion;
+    if (!silent && mounted) setState(() => _updatesLoading = true);
+    try {
+      // The web dashboard shows the first four server-ordered notifications.
+      final inbox = await _notificationService.getInbox();
+      if (!mounted || version != _updatesVersion) return;
+      final latest = inbox.items.take(4).toList(growable: false);
+      setState(() {
+        _latestUpdates = latest;
+        _updatesError = null;
+      });
+      if (latest.any((n) => n['isRead'] != true)) {
+        if (!_unreadPulse.isAnimating) _unreadPulse.repeat(reverse: true);
+      } else {
+        _unreadPulse.stop();
+        _unreadPulse.value = 1;
+      }
+    } catch (error) {
+      if (!mounted || version != _updatesVersion) return;
+      setState(() => _updatesError =
+          error.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted && version == _updatesVersion) {
+        setState(() => _updatesLoading = false);
+      }
+    }
+  }
+
+  Future<void> _refreshDashboard() async {
+    await Future.wait<void>([
+      _loadDashboardData(),
+      _loadUpdates(silent: true),
+    ]);
+  }
+
+  Future<void> _openInbox({String? notificationId}) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => NotificationsScreen(
+        openNotificationId: notificationId,
+      ),
+    ));
+    if (mounted) await _loadUpdates(silent: true);
   }
 
   Future<void> _loadDashboardData() async {
@@ -83,7 +182,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: _loadDashboardData,
+        onRefresh: _refreshDashboard,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(13, 10, 13, 24),
@@ -139,7 +238,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       context,
                       Icons.add_task_rounded,
                       'ახალი დავალება',
-                      () {},
+                      () => widget.onQuickAction?.call(DashboardQuickAction.task),
                       primary: true,
                     ),
                   ),
@@ -148,21 +247,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       context,
                       Icons.post_add_rounded,
                       'მოთხოვნის შექმნა',
-                      () {},
+                      () => widget.onQuickAction?.call(DashboardQuickAction.request),
                     ),
                   ),
                   Expanded(
                     child: _buildActionButton(
                       context,
-                      Icons.group_add_outlined,
-                      'ჯგუფის შექმნა',
-                      () {},
+                      Icons.chat_bubble_outline_rounded,
+                      'საუბრის დაწყება',
+                      () => widget.onQuickAction?.call(DashboardQuickAction.conversation),
                       purple: true,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 23),
+            _latestUpdatesSection(palette),
             const SizedBox(height: 23),
             _sectionTitle('სისტემური სტატუსი'),
             const SizedBox(height: 10),
@@ -191,6 +292,167 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  String _updateDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.day}, ${date.year}';
+  }
+
+  Widget _updateDot(AppPalette palette, bool unread) {
+    if (!unread) {
+      return Container(
+        key: const ValueKey('dashboard-read-dot'),
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: palette.muted.withValues(alpha: 0.30),
+          shape: BoxShape.circle,
+        ),
+      );
+    }
+    // Only unread items pulse. On reading, the server-backed isRead flag
+    // swaps this for a static neutral dot; permanent selections are unaffected.
+    return FadeTransition(
+      key: const ValueKey('dashboard-unread-dot'),
+      opacity: _pulseOpacity,
+      child: Container(
+        width: 12, height: 12,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withValues(alpha: 0.32),
+              blurRadius: 10,
+              spreadRadius: 3,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _latestUpdatesSection(AppPalette palette) {
+    return Container(
+      key: const ValueKey('dashboard-latest-updates'),
+      decoration: _panelDecoration(palette),
+      padding: const EdgeInsets.fromLTRB(14, 17, 14, 15),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            Expanded(child: Text('Latest updates', style: TextStyle(
+              color: palette.ink, fontSize: 17,
+              fontWeight: FontWeight.w800, letterSpacing: -0.35,
+            ))),
+            TextButton.icon(
+              key: const ValueKey('dashboard-open-inbox'),
+              onPressed: () => _openInbox(),
+              label: const Text('Open inbox', style: TextStyle(
+                fontSize: 11.5, fontWeight: FontWeight.w800,
+              )),
+              icon: const Icon(Icons.chevron_right_rounded, size: 18),
+              iconAlignment: IconAlignment.end,
+              style: TextButton.styleFrom(
+                foregroundColor: palette.link,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                minimumSize: const Size(0, 36),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 13),
+          if (_updatesLoading && _latestUpdates.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_updatesError != null && _latestUpdates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Text(_updatesError!, style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              )),
+            )
+          else if (_latestUpdates.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 18),
+              child: Text("You're all caught up.",
+                style: TextStyle(color: palette.muted, fontSize: 12)),
+            )
+          else
+            for (final item in _latestUpdates) ...[
+              Semantics(
+                button: true,
+                label: '${item['title'] ?? 'Update'}',
+                child: GestureDetector(
+                  key: ValueKey('dashboard-update-${item['id']}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: item['id'] == null
+                      ? null
+                      : () => _openInbox(
+                          notificationId: item['id'].toString()),
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(13, 14, 12, 14),
+                    decoration: BoxDecoration(
+                      color: palette.panel,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: palette.cardBorder.withValues(alpha: 0.50)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: _updateDot(palette, item['isRead'] != true),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              (item['title'] ?? 'Update').toString(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12.5, color: palette.ink,
+                                fontWeight: item['isRead'] == true
+                                    ? FontWeight.w600 : FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text((item['body'] ?? '').toString(),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: palette.secondaryText,
+                                fontSize: 11.5, height: 1.25,
+                              ),
+                            ),
+                          ],
+                        )),
+                        const SizedBox(width: 7),
+                        Text(_updateDate(item['createdAt']),
+                          style: TextStyle(
+                            color: palette.muted, fontSize: 9.5,
+                          )),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 9),
+            ],
+        ],
       ),
     );
   }

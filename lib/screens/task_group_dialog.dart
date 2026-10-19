@@ -232,8 +232,8 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                       child: InkWell(
                         onTap: _submit,
                         borderRadius: BorderRadius.circular(23),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 19),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 19),
                           child: Center(
                             child: Text(
                               _editing ? 'Save' : 'Create group',

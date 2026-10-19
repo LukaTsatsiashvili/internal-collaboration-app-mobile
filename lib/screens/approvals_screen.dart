@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/approvals/data/approval_service.dart';
 import 'approval_advanced_filters.dart';
 import 'approval_filter_dialog.dart';
@@ -573,9 +574,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     }
   }
 
-  Widget _sortMenu() => PopupMenuButton<String>(
+  Widget _sortMenu() => AppDropdownTheme(
+    child: PopupMenuButton<String>(
     tooltip: 'Sort approvals',
     position: PopupMenuPosition.under,
+    offset: AppDropdownTheme.menuGap,
     onSelected: (value) => setState(() => _sort = value),
     color: _p.card,
     constraints: BoxConstraints(
@@ -617,6 +620,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         fontSize: 11, fontWeight: FontWeight.w700,
       )),
     ]),
+    ),
   );
 
   Widget _toolbar() => Container(

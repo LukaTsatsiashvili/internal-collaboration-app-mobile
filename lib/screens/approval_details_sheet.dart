@@ -105,12 +105,15 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
       await work();
       _changed = true;
       await _load(showSpinner: false);
-      if (mounted) setState(() => _comment.clear());
+      if (mounted) {
+        _comment.clear();
+      }
     } catch (error) {
       if (!mounted) return;
-      // Revision conflicts are resolved by refreshing the live request.
-      setState(() => _error = _message(error));
+      // On 409 refresh the latest revision, then display the actual error.
+      final message = _message(error);
       await _load(showSpinner: false);
+      if (mounted) setState(() => _error = message);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -710,7 +713,7 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
     final size = MediaQuery.sizeOf(context);
     final safe = MediaQuery.paddingOf(context);
     final maxHeight = (size.height - keyboard - safe.top - safe.bottom - 26)
-        .clamp(180.0, size.height);
+        .clamp(180.0, size.height).toDouble();
     return AnimatedPadding(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,

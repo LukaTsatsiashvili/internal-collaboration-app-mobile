@@ -35,6 +35,43 @@ class ApprovalService {
     return response.data['data'] as List<dynamic>;
   }
 
+  /// Only the signed-in user's group can be renamed or archived.
+  Future<Map<String, dynamic>> renameApprovalGroup({
+    required String id,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 120) {
+      throw ArgumentError('ჯგუფის სახელი უნდა შეიცავდეს 1-120 სიმბოლოს');
+    }
+    try {
+      final response = await _apiClient.dio.patch(
+        '/approval-groups/${Uri.encodeComponent(id)}',
+        data: <String, dynamic>{'name': trimmed},
+      );
+      return _approvalData(response.data, 'Group rename failed');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Group rename failed'));
+    }
+  }
+
+  /// Backend soft-archives the group and moves only this user's layouts
+  /// back to Ungrouped; no approval requests are deleted.
+  Future<void> deleteApprovalGroup(String id) async {
+    try {
+      final response = await _apiClient.dio.delete(
+        '/approval-groups/${Uri.encodeComponent(id)}',
+      );
+      final body = response.data;
+      if (body is! Map || body['success'] != true ||
+          body['data'] is! Map || body['data']['id']?.toString() != id) {
+        throw StateError('Group deletion was not confirmed');
+      }
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Group deletion failed'));
+    }
+  }
+
   /// Populate all request types in the advanced filter, not only used ones.
   Future<List<dynamic>> getApprovalTypes() async {
     final response = await _apiClient.dio.get('/approval-types');

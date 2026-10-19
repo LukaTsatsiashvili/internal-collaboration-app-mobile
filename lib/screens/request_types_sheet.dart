@@ -268,7 +268,6 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     // PopupMenuButton. It also centers the content and automatically keeps
     // it inside the keyboard- and SafeArea-adjusted viewport.
     return Dialog(
-      key: const ValueKey('request-types-sheet-panel'),
       insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       alignment: Alignment.center,
       backgroundColor: p.panel,
@@ -280,6 +279,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
         side: BorderSide(color: p.cardBorder),
       ),
       child: ConstrainedBox(
+        key: const ValueKey('request-types-sheet-panel'),
         constraints: const BoxConstraints(maxWidth: 450),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),

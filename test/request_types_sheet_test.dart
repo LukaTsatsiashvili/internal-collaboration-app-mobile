@@ -1,0 +1,101 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:gtex_collab_app/core/theme/app_theme_extensions.dart';
+import 'package:gtex_collab_app/features/approvals/data/approval_service.dart';
+import 'package:gtex_collab_app/screens/request_types_sheet.dart';
+
+class FakeRequestTypeService extends ApprovalService {
+  int loads = 0;
+
+  @override
+  Future<List<dynamic>> getManagedApprovalTypes() async {
+    loads++;
+    return [
+      {
+        'id': '1', 'name': 'Active request', 'code': 'TST1',
+        'status': 'ACTIVE', 'version': 2,
+        '_count': {'requests': 3},
+        'createdBy': {'displayName': 'System Admin'},
+      },
+      {
+        'id': '2', 'name': 'Inactive request', 'code': 'TST2',
+        'status': 'INACTIVE', 'version': 1,
+        '_count': {'requests': 1},
+        'createdBy': {'displayName': 'System Admin'},
+      },
+      {
+        'id': '3', 'name': 'Draft request', 'code': 'DRFT3',
+        'status': 'DRAFT', 'version': 1,
+        '_count': {'requests': 0},
+        'createdBy': {'displayName': 'System Admin'},
+      },
+    ];
+  }
+}
+
+Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) async {
+  await tester.pumpWidget(MaterialApp(
+    theme: ThemeData(extensions: const [AppPalette.light]),
+    home: Scaffold(body: Builder(
+      builder: (context) => Center(child: ElevatedButton(
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          useSafeArea: true,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
+          builder: (_) => RequestTypesSheet(service: service),
+        ),
+        child: const Text('Open types'),
+      )),
+    )),
+  ));
+  await tester.tap(find.text('Open types'));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('Request Types shows server records and static action labels',
+      (tester) async {
+    final service = FakeRequestTypeService();
+    await showTypes(tester, service);
+    expect(service.loads, 1);
+    expect(find.text('Request types'), findsOneWidget);
+    expect(find.text('All Statuses'), findsOneWidget);
+    expect(find.text('New type'), findsOneWidget);
+    expect(find.text('Active request'), findsOneWidget);
+    expect(find.text('Edit'), findsWidgets);
+    expect(find.text('Deactivate'), findsWidgets);
+    expect(find.textContaining('TST1 · v2 · 3 requests'), findsOneWidget);
+  });
+
+  testWidgets('status options include All, Active, Inactive and Draft',
+      (tester) async {
+    final service = FakeRequestTypeService();
+    await showTypes(tester, service);
+    await tester.tap(find.byTooltip('Request type status'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(PopupMenuItem<String>, 'All Statuses'),
+        findsOneWidget);
+    expect(find.widgetWithText(PopupMenuItem<String>, 'Active'),
+        findsOneWidget);
+    expect(find.widgetWithText(PopupMenuItem<String>, 'Inactive'),
+        findsOneWidget);
+    expect(find.widgetWithText(PopupMenuItem<String>, 'Draft'),
+        findsOneWidget);
+
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'Draft'));
+    await tester.pumpAndSettle();
+    expect(find.text('Draft request'), findsOneWidget);
+    expect(find.text('Active request'), findsNothing);
+    expect(find.text('Inactive request'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).last, 'DRFT3');
+    await tester.pumpAndSettle();
+    expect(find.text('Draft request'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'no-such-code');
+    await tester.pumpAndSettle();
+    expect(find.text('No request types found'), findsOneWidget);
+    expect(service.loads, 1); // Search and status filtering are local.
+  });
+}

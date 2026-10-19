@@ -83,6 +83,42 @@ class ApprovalService {
     }
   }
 
+  /// Same read endpoint used by the web Approval Type editor.
+  Future<List<dynamic>> getUsersForApprovalSteps() async {
+    final response = await _apiClient.dio.get('/users');
+    final payload = response.data;
+    if (payload is Map && payload['success'] == true &&
+        payload['data'] is List) {
+      return payload['data'] as List<dynamic>;
+    }
+    throw StateError('Approvers could not be loaded');
+  }
+
+  /// The Fastify/Zod API validates formSchema, step order and permissions.
+  /// Keep the payload identical to the web configurator.
+  Future<Map<String, dynamic>> createApprovalType(
+      Map<String, dynamic> payload) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-types',
+        data: payload,
+      );
+      final result = response.data;
+      if (result is Map && result['success'] == true &&
+          result['data'] is Map) {
+        return Map<String, dynamic>.from(result['data'] as Map);
+      }
+      throw StateError('Approval type could not be created');
+    } on DioException catch (error) {
+      final body = error.response?.data;
+      final problem = body is Map ? body['error'] : null;
+      final message = problem is Map ? problem['message'] : null;
+      throw Exception(
+        message?.toString() ?? 'Approval type could not be created',
+      );
+    }
+  }
+
   /// Used only to display current-user quick filters, as on the web page.
   Future<String> getCurrentUserId() async {
     final response = await _apiClient.dio.get('/auth/me');

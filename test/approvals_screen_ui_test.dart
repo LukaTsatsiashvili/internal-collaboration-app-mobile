@@ -6,6 +6,23 @@ import 'package:gtex_collab_app/screens/approvals_screen.dart';
 
 class FakeApprovalService extends ApprovalService {
   final List<String> createdGroups = [];
+  final Map<String, String> renamedGroups = {};
+  final Set<String> deletedGroupIds = {};
+  final List<String> deletedCalls = [];
+
+  @override
+  Future<Map<String, dynamic>> renameApprovalGroup({
+    required String id, required String name,
+  }) async {
+    renamedGroups[id] = name;
+    return {'id': id, 'name': name, 'position': 1000};
+  }
+
+  @override
+  Future<void> deleteApprovalGroup(String id) async {
+    deletedCalls.add(id);
+    deletedGroupIds.add(id);
+  }
 
   @override
   Future<Map<String, dynamic>> createApprovalGroup({required String name}) async {
@@ -49,8 +66,12 @@ class FakeApprovalService extends ApprovalService {
 
   @override
   Future<List<dynamic>> getApprovalGroups() async => [
-        {'id': 'group-1', 'name': 'My reviews', 'position': 1000},
-        {'id': 'group-2', 'name': 'Archive', 'position': 2000},
+        if (!deletedGroupIds.contains('group-1'))
+          {'id': 'group-1', 'name': renamedGroups['group-1'] ?? 'My reviews',
+            'position': 1000},
+        if (!deletedGroupIds.contains('group-2'))
+          {'id': 'group-2', 'name': renamedGroups['group-2'] ?? 'Archive',
+            'position': 2000},
         for (var i = 0; i < createdGroups.length; i++)
           {'id': 'new-${i + 1}', 'name': createdGroups[i],
             'position': 3000 + i},
@@ -180,6 +201,61 @@ void main() {
 
     expect(service.createdGroups, ['Team reviews']);
     expect(find.text('Team reviews'), findsOneWidget);
+  });
+
+  testWidgets('rename group edits the stored name without changing requests',
+      (tester) async {
+    final service = FakeApprovalService();
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: ApprovalsScreen(service: service),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(
+      const ValueKey('edit-approval-group-group-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename approval group'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'Finance reviews');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(service.renamedGroups['group-1'], 'Finance reviews');
+    expect(find.text('Finance reviews'), findsOneWidget);
+    expect(find.text('Purchase laptop'), findsOneWidget);
+    expect(find.byTooltip('Approval actions'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('delete group requests confirmation and preserves approvals',
+      (tester) async {
+    final service = FakeApprovalService();
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: ApprovalsScreen(service: service),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(
+      const ValueKey('delete-approval-group-group-1')));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete “My reviews”?'), findsOneWidget);
+    expect(find.textContaining('move to Ungrouped'), findsOneWidget);
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(service.deletedCalls, isEmpty);
+    await tester.tap(find.byKey(
+      const ValueKey('delete-approval-group-group-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+
+    expect(service.deletedCalls, ['group-1']);
+    expect(find.text('My reviews'), findsNothing);
+    expect(find.text('Ungrouped'), findsOneWidget);
+    expect(find.text('Purchase laptop'), findsOneWidget);
+    expect(find.text('Vacation request'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
 }

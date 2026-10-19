@@ -8,6 +8,7 @@ import 'approval_filter_dialog.dart';
 import 'task_group_dialog.dart';
 import 'request_types_sheet.dart';
 import 'approval_request_create_dialog.dart';
+import 'approval_details_sheet.dart';
 
 class ApprovalsScreen extends StatefulWidget {
   const ApprovalsScreen({super.key, this.focusRequestId, this.service});
@@ -121,38 +122,23 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     super.dispose();
   }
 
-  void _showFocusedRequest(dynamic request) {
-    final steps = request['steps'] is List ? request['steps'] as List : <dynamic>[];
-    showDialog<void>(
+  Future<void> _showFocusedRequest(dynamic request) async {
+    final id = request is Map ? request['id']?.toString() : null;
+    if (id == null || id.isEmpty || !mounted) return;
+    // Open the same full-fidelity detail from the card or notification.
+    final changed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text((request['title'] ?? 'მოთხოვნა').toString()),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('სტატუსი: ${request['status'] ?? '-'}'),
-              const SizedBox(height: 12),
-              for (final step in steps)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    '${step is Map ? (step['name'] ?? 'Step') : 'Step'}: '
-                    '${step is Map ? (step['status'] ?? '-') : '-'}',
-                  ),
-                ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('დახურვა'),
-          ),
-        ],
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: 0.48),
+      elevation: 0,
+      clipBehavior: Clip.none,
+      builder: (_) => ApprovalDetailsSheet(
+        requestId: id, service: _approvalService,
       ),
     );
+    if (mounted && changed == true) await _fetchApprovals();
   }
 
   AppPalette get _p => Theme.of(context).extension<AppPalette>()!;

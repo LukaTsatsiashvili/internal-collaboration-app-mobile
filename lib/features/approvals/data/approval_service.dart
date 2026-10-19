@@ -44,6 +44,45 @@ class ApprovalService {
     return response.data['data'] as List<dynamic>;
   }
 
+  /// Management list contains ACTIVE, INACTIVE and DRAFT records, including
+  /// the creator and request count required by the mobile Request Types sheet.
+  /// The server enforces approvals.configure permission for this endpoint.
+  Future<List<dynamic>> getManagedApprovalTypes() async {
+    final response = await _apiClient.dio.get('/approval-types/manage');
+    final payload = response.data;
+    if (payload is Map && payload['success'] == true &&
+        payload['data'] is List) {
+      return payload['data'] as List<dynamic>;
+    }
+    throw StateError('Request types could not be loaded');
+  }
+
+  /// Approval Group creation is separate from task groups and uses its own API.
+  /// Sending a JSON body is required by the Fastify server.
+  Future<Map<String, dynamic>> createApprovalGroup({required String name}) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 120) {
+      throw ArgumentError('ჯგუფის სახელი უნდა შეიცავდეს 1-120 სიმბოლოს');
+    }
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-groups',
+        data: <String, dynamic>{'name': trimmed},
+      );
+      final payload = response.data;
+      if (payload is Map && payload['success'] == true &&
+          payload['data'] is Map) {
+        return Map<String, dynamic>.from(payload['data'] as Map);
+      }
+      throw StateError('ჯგუფის შექმნა ვერ მოხერხდა');
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final serverError = data is Map ? data['error'] : null;
+      final detail = serverError is Map ? serverError['message'] : null;
+      throw Exception(detail?.toString() ?? 'ჯგუფის შექმნა ვერ მოხერხდა');
+    }
+  }
+
   /// Used only to display current-user quick filters, as on the web page.
   Future<String> getCurrentUserId() async {
     final response = await _apiClient.dio.get('/auth/me');

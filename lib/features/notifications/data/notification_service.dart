@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 
@@ -11,13 +12,15 @@ class NotificationInbox {
 
 /// Uses the existing authenticated API and user-scoped realtime events.
 class NotificationService {
-  final ApiClient _api = ApiClient();
+  NotificationService({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  final Dio _dio;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   IO.Socket? _socket;
   int _socketVersion = 0;
 
   Future<NotificationInbox> getInbox() async {
-    final response = await _api.dio.get('/notifications');
+    final response = await _dio.get('/notifications');
     final payload = response.data;
     if (payload is! Map || payload['success'] != true || payload['data'] is! List) {
       throw StateError('შეტყობინებების ჩატვირთვა ვერ მოხერხდა');
@@ -34,15 +37,18 @@ class NotificationService {
   }
 
   Future<void> markRead(String id) async {
-    await _api.dio.post('/notifications/${Uri.encodeComponent(id)}/read');
+    await _dio.post('/notifications/${Uri.encodeComponent(id)}/read',
+        data: const <String, dynamic>{});
   }
 
   Future<void> markUnread(String id) async {
-    await _api.dio.post('/notifications/${Uri.encodeComponent(id)}/unread');
+    await _dio.post('/notifications/${Uri.encodeComponent(id)}/unread',
+        data: const <String, dynamic>{});
   }
 
   Future<void> markAllRead() async {
-    await _api.dio.post('/notifications/read-all');
+    await _dio.post('/notifications/read-all',
+        data: const <String, dynamic>{});
   }
 
   /// Socket events are invalidation hints; the REST API is the source of truth.

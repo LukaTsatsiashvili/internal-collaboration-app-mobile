@@ -46,6 +46,57 @@ class FakeRequestTypeService extends ApprovalService {
   }
 }
 
+class FakeEditableRequestTypes extends FakeRequestTypeService {
+  final changes = <Map<String, dynamic>>[];
+  final statuses = <String>[];
+  String currentStatus = 'ACTIVE';
+  int version = 4;
+
+  @override
+  Future<List<dynamic>> getManagedApprovalTypes() async {
+    loads++;
+    return [
+      {
+        'id': '1',
+        'name': 'Purchase review',
+        'code': 'PURCHASE',
+        'description': 'Original',
+        'status': currentStatus,
+        'version': version,
+        '_count': {'requests': 2},
+        'formSchema': {
+          'field1': {
+            'label': 'Reason', 'type': 'textarea', 'required': true,
+          },
+        },
+        'steps': [
+          {
+            'stepNumber': 1, 'name': 'Manager review',
+            'approverRule': 'REQUESTER_MANAGER',
+            'approverValue': null,
+          },
+        ],
+      },
+    ];
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateApprovalType(
+      String id, Map<String, dynamic> payload) async {
+    changes.add({'id': id, ...payload});
+    version++;
+    return {'id': id, 'version': version, ...payload};
+  }
+
+  @override
+  Future<Map<String, dynamic>> changeApprovalTypeStatus(
+      String id, String status) async {
+    statuses.add(status);
+    currentStatus = status;
+    return {'id': id, 'status': status};
+  }
+}
+
 Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) async {
   await tester.pumpWidget(MaterialApp(
     theme: ThemeData(extensions: const [AppPalette.light]),
@@ -205,6 +256,50 @@ void main() {
     expect(payload['steps'][0]['approverRule'], 'REQUESTER_MANAGER');
     expect(service.loads, 2);
     expect(find.text('New approval type'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deactivate and activate update the backend status and listing',
+      (tester) async {
+    final service = FakeEditableRequestTypes();
+    await showTypes(tester, service);
+
+    await tester.tap(find.byKey(const ValueKey('toggle-type-1')));
+    await tester.pumpAndSettle();
+    expect(service.statuses, ['INACTIVE']);
+    expect(service.currentStatus, 'INACTIVE');
+
+    await tester.tap(find.byKey(const ValueKey('toggle-type-1')));
+    await tester.pumpAndSettle();
+    expect(service.statuses, ['INACTIVE', 'ACTIVE']);
+    expect(service.loads, 3);
+  });
+
+  testWidgets('editing used type keeps code locked and saves a new version',
+      (tester) async {
+    final service = FakeEditableRequestTypes();
+    await showTypes(tester, service);
+    await tester.tap(find.byKey(const ValueKey('edit-type-1')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Save new version'), findsOneWidget);
+    final code = tester.widget<TextFormField>(
+        find.byKey(const ValueKey('approval-type-code')));
+    expect(code.enabled, isFalse);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('approval-type-name')),
+      'Updated purchase review',
+    );
+    await tester.tap(find.text('Save new version'));
+    await tester.pumpAndSettle();
+    expect(service.changes, hasLength(1));
+    expect(service.changes.single['id'], '1');
+    expect(service.changes.single['code'], 'PURCHASE');
+    expect(service.changes.single['name'], 'Updated purchase review');
+    expect(service.changes.single['steps'][0]['stepNumber'], 1);
+    expect(service.version, 5);
+    expect(service.loads, 2);
     expect(tester.takeException(), isNull);
   });
 

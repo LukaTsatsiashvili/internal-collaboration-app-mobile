@@ -186,14 +186,15 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
     required Map<String, String> options,
     required ValueChanged<String> onSelected,
     String? tooltip,
-  }) => PopupMenuButton<String>(
+  }) => LayoutBuilder(
+    builder: (context, bounds) => PopupMenuButton<String>(
     tooltip: tooltip ?? 'Select option',
     enabled: !_saving,
     position: PopupMenuPosition.under,
     color: _p.card,
     constraints: BoxConstraints(
-      minWidth: math.max(0.0, math.min(230.0, MediaQuery.sizeOf(context).width - 40)),
-      maxWidth: math.max(0.0, math.min(350.0, MediaQuery.sizeOf(context).width - 28)),
+      minWidth: bounds.maxWidth,
+      maxWidth: bounds.maxWidth,
       maxHeight: MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(
@@ -231,6 +232,7 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
         const SizedBox(width: 6),
         Icon(Icons.keyboard_arrow_down_rounded, color: _p.link, size: 19),
       ]),
+    ),
     ),
   );
 

@@ -172,8 +172,8 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
     position: PopupMenuPosition.under,
     color: _p.card,
     constraints: BoxConstraints(
-      minWidth: math.min(230, MediaQuery.sizeOf(context).width - 40),
-      maxWidth: math.min(350, MediaQuery.sizeOf(context).width - 28),
+      minWidth: math.max(0.0, math.min(230.0, MediaQuery.sizeOf(context).width - 40)),
+      maxWidth: math.max(0.0, math.min(350.0, MediaQuery.sizeOf(context).width - 28)),
       maxHeight: MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(

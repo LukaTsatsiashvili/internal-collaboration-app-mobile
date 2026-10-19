@@ -295,6 +295,11 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
         position: PopupMenuPosition.under,
         offset: AppDropdownTheme.menuGap,
         color: _p.card,
+        elevation: 9,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(17),
+          side: BorderSide(color: _p.cardBorder),
+        ),
         constraints: AppDropdownTheme.menuBounds(
           bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.4,
         ),
@@ -337,6 +342,11 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
       position: PopupMenuPosition.under,
       offset: AppDropdownTheme.menuGap,
       color: _p.card,
+      elevation: 9,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(17),
+        side: BorderSide(color: _p.cardBorder),
+      ),
       constraints: AppDropdownTheme.menuBounds(
         bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.4,
       ),

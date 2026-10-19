@@ -6,6 +6,19 @@ import 'package:gtex_collab_app/screens/request_types_sheet.dart';
 
 class FakeRequestTypeService extends ApprovalService {
   int loads = 0;
+  final List<Map<String, dynamic>> created = [];
+
+  @override
+  Future<List<dynamic>> getUsersForApprovalSteps() async => [
+        {'id': 'user-1', 'displayName': 'Admin', 'status': 'ACTIVE'},
+      ];
+
+  @override
+  Future<Map<String, dynamic>> createApprovalType(
+      Map<String, dynamic> payload) async {
+    created.add(payload);
+    return {'id': 'created-1', ...payload};
+  }
 
   @override
   Future<List<dynamic>> getManagedApprovalTypes() async {
@@ -38,9 +51,11 @@ Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) asyn
     theme: ThemeData(extensions: const [AppPalette.light]),
     home: Scaffold(body: Builder(
       builder: (context) => Center(child: ElevatedButton(
-        onPressed: () => showDialog<void>(
+        onPressed: () => showModalBottomSheet<void>(
           context: context,
           useSafeArea: true,
+          isScrollControlled: true,
+          backgroundColor: Colors.transparent,
           builder: (_) => RequestTypesSheet(service: service),
         ),
         child: const Text('Open types'),
@@ -49,7 +64,7 @@ Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) asyn
   ));
   await tester.tap(find.text('Open types'));
   await tester.pumpAndSettle();
-  // Regression: showDialog previously lacked the required Material ancestor.
+  // Regression: Input widgets still need a Material ancestor in bottom sheets.
   expect(tester.takeException(), isNull);
   expect(
     find.ancestor(
@@ -125,7 +140,7 @@ void main() {
     expect(allPanel.left, greaterThanOrEqualTo(13));
     expect(allPanel.right, lessThanOrEqualTo(screenWidth - 13));
     expect(allPanel.bottom, lessThan(screenHeight));
-    expect((allPanel.center.dy - screenHeight / 2).abs(), lessThan(40));
+    expect(screenHeight - allPanel.bottom, lessThan(40));
     expect(list.height, lessThanOrEqualTo(285.1));
 
     // Cards beyond the initial two remain accessible inside the list.
@@ -142,7 +157,7 @@ void main() {
     expect(oneCardPanel.height, lessThan(allPanel.height));
   });
 
-  testWidgets('compact dialog stays in bounds on a short phone viewport',
+  testWidgets('compact bottom sheet stays in bounds on a short phone viewport',
       (tester) async {
     tester.view.physicalSize = const Size(360, 560);
     tester.view.devicePixelRatio = 1.0;
@@ -156,6 +171,39 @@ void main() {
     expect(panel.right, lessThanOrEqualTo(347));
     expect(panel.top, greaterThanOrEqualTo(12));
     expect(panel.bottom, lessThanOrEqualTo(548));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('New Type creates backend-compatible data and reloads listing',
+      (tester) async {
+    final service = FakeRequestTypeService();
+    await showTypes(tester, service);
+    await tester.tap(find.text('New type'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('New approval type'), findsOneWidget);
+    expect(find.text('Request form'), findsOneWidget);
+    expect(find.text('Approval steps, in order'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('approval-type-name')),
+      'Test Approval',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('approval-type-code')),
+      'test_approval',
+    );
+    await tester.tap(find.text('Create approval type'));
+    await tester.pumpAndSettle();
+
+    expect(service.created, hasLength(1));
+    final payload = service.created.single;
+    expect(payload['name'], 'Test Approval');
+    expect(payload['code'], 'TEST_APPROVAL');
+    expect(payload['formSchema']['field1']['type'], 'textarea');
+    expect(payload['formSchema']['field1']['required'], isTrue);
+    expect(payload['steps'][0]['approverRule'], 'REQUESTER_MANAGER');
+    expect(service.loads, 2);
+    expect(find.text('New approval type'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

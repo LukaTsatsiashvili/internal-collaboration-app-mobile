@@ -31,6 +31,20 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  DashboardQuickAction? _pendingQuickAction;
+  int _quickActionLaunchId = 0;
+
+  void _launchFromDashboard(DashboardQuickAction action) {
+    setState(() {
+      _pendingQuickAction = action;
+      _quickActionLaunchId++;
+      _currentIndex = switch (action) {
+        DashboardQuickAction.conversation => 1,
+        DashboardQuickAction.task => 2,
+        DashboardQuickAction.request => 3,
+      };
+    });
+  }
 
 
   // Floating bottom navigation inspired by the provided Stitch design.
@@ -127,6 +141,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                               onTap: () {
                                 setState(() {
                                   _currentIndex = index;
+                                  _pendingQuickAction = null;
                                 });
                               },
                               child: Center(
@@ -161,10 +176,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         onChangeLanguage: widget.onChangeLanguage,
         currentLanguage: widget.currentLanguage,
         currentThemeMode: widget.currentThemeMode,
+        onQuickAction: _launchFromDashboard,
       ),
-      const ChatsScreen(),
-      const TasksScreen(),
-      const ApprovalsScreen(),
+      ChatsScreen(
+        key: ValueKey('chat-$_quickActionLaunchId'),
+        openCreateOnStart:
+            _pendingQuickAction == DashboardQuickAction.conversation,
+      ),
+      TasksScreen(
+        key: ValueKey('tasks-$_quickActionLaunchId'),
+        openCreateOnStart:
+            _pendingQuickAction == DashboardQuickAction.task,
+      ),
+      ApprovalsScreen(
+        key: ValueKey('approvals-$_quickActionLaunchId'),
+        openCreateOnStart:
+            _pendingQuickAction == DashboardQuickAction.request,
+      ),
       const DriveScreen(),
     ];
 

@@ -207,15 +207,19 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       // Changing tabs replaces only this navigator's stack with the chosen
       // root. Include language/theme to keep root widgets in sync when the
       // app's appearance is changed from the Dashboard profile controls.
-      body: Navigator(
-        key: ValueKey<String>(
-          'app-shell-$_currentIndex-$_quickActionLaunchId-'
-          '$_tabNavigationVersion-${widget.currentLanguage}-'
-          '${widget.currentThemeMode}',
-        ),
-        onGenerateRoute: (settings) => MaterialPageRoute<void>(
-          settings: settings,
-          builder: (_) => screens[_currentIndex],
+      body: HeroControllerScope.none(
+        // The root MaterialApp already owns a HeroController; never attach
+        // the same controller to this nested body navigator.
+        child: Navigator(
+          key: ValueKey<String>(
+            'app-shell-$_currentIndex-$_quickActionLaunchId-'
+            '$_tabNavigationVersion-${widget.currentLanguage}-'
+            '${widget.currentThemeMode}',
+          ),
+          onGenerateRoute: (settings) => MaterialPageRoute<void>(
+            settings: settings,
+            builder: (_) => screens[_currentIndex],
+          ),
         ),
       ),
       bottomNavigationBar: _buildFloatingNavigation(context),

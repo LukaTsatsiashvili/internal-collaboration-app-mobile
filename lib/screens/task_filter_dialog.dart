@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import 'task_advanced_filters.dart';
 
 class TaskFilterDialog extends StatefulWidget {
@@ -327,24 +328,16 @@ class _TaskFilterDialogState extends State<TaskFilterDialog> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _heading(heading),
-        Theme(
-          data: Theme.of(context).copyWith(
-            splashFactory: NoSplash.splashFactory,
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            hoverColor: Colors.transparent,
-          ),
+        AppDropdownTheme(
           child: LayoutBuilder(
             builder: (context, bounds) => PopupMenuButton<String>(
               tooltip: heading,
               position: PopupMenuPosition.under,
-              offset: const Offset(0, 5),
+              offset: AppDropdownTheme.menuGap,
               color: p.card,
               elevation: 9,
-              constraints: BoxConstraints(
-                minWidth: bounds.maxWidth,
-                maxWidth: bounds.maxWidth,
-                maxHeight: 260,
+              constraints: AppDropdownTheme.menuBounds(
+                bounds.maxWidth, 260,
               ),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(17),

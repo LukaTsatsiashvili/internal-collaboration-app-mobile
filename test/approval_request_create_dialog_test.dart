@@ -169,4 +169,18 @@ void main() {
     expect(service.saved.single['attachmentIds'], ['uploaded-file-1']);
   });
 
+  testWidgets('request type menu never exceeds its parent dropdown width',
+      (tester) async {
+    final service = FakeApprovalRequestService();
+    await openNewRequest(tester, service);
+
+    final menu = find.byType(PopupMenuButton<String>).first;
+    final popup = tester.widget<PopupMenuButton<String>>(menu);
+    final parentWidth = tester.getSize(menu).width;
+    expect(popup.constraints, isNotNull);
+    expect(popup.constraints!.maxWidth,
+        lessThanOrEqualTo(parentWidth + 0.1));
+    expect(tester.takeException(), isNull);
+  });
+
 }

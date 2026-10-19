@@ -264,42 +264,23 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     // The sheet should wrap its content; only the request-type cards scroll.
     // Allow two standard cards (plus list margins) before enabling scrolling.
     const twoCardListHeight = 285.0;
-    return LayoutBuilder(
-      builder: (context, bounds) {
-        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-        final safeBottom = MediaQuery.paddingOf(context).bottom;
-        final outerBottomGap = 14.0 + safeBottom;
-        final availableHeight =
-            (bounds.maxHeight - keyboardInset - outerBottomGap - 14.0)
-                .clamp(0.0, bounds.maxHeight);
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.fromLTRB(
-            14, 0, 14, keyboardInset + outerBottomGap,
-          ),
-          child: Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: 450,
-                maxHeight: availableHeight,
-              ),
-              child: Container(
-        key: const ValueKey('request-types-sheet-panel'),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: p.panel,
-          borderRadius: BorderRadius.circular(27),
-          border: Border.all(color: p.cardBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: _dark ? 0.24 : 0.12),
-              blurRadius: 25,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
+    // Dialog supplies the Material ancestor required by TextField and
+    // PopupMenuButton. It also centers the content and automatically keeps
+    // it inside the keyboard- and SafeArea-adjusted viewport.
+    return Dialog(
+      key: const ValueKey('request-types-sheet-panel'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      alignment: Alignment.center,
+      backgroundColor: p.panel,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(27),
+        side: BorderSide(color: p.cardBorder),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 450),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),
           Container(
@@ -451,11 +432,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
           ),
           const SizedBox(height: 14),
         ]),
-              ),
-            ),
-          ),
-        );
-      },
+      ),
     );
   }
 }

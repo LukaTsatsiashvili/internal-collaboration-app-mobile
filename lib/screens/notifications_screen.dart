@@ -12,10 +12,12 @@ import '../core/theme/app_theme_extensions.dart';
 
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, this.service});
+  const NotificationsScreen({super.key, this.service, this.openNotificationId});
 
   /// Optional injection for isolated widget tests.
   final NotificationService? service;
+  /// Open a Latest Updates item using Inbox's existing read/deep-link flow.
+  final String? openNotificationId;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -32,6 +34,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
   String? _busyId;
   String? _error;
   String _filter = 'all';
+  bool _initialNotificationOpened = false;
 
   List<Map<String, dynamic>> get _visibleItems {
     if (_filter == 'unread') {
@@ -86,6 +89,17 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         _unreadCount = inbox.unreadCount;
         _error = null;
       });
+      if (!_initialNotificationOpened && widget.openNotificationId != null) {
+        for (final item in inbox.items) {
+          if (item['id']?.toString() == widget.openNotificationId) {
+            _initialNotificationOpened = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _open(item);
+            });
+            break;
+          }
+        }
+      }
     } catch (error) {
       if (!mounted || version != _requestVersion) return;
       setState(() {

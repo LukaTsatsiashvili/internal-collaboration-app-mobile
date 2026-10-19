@@ -456,7 +456,11 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
   Widget build(BuildContext context) {
     final height = MediaQuery.sizeOf(context).height;
     final keyboard = MediaQuery.viewInsetsOf(context).bottom;
-    final available = math.max(160.0, height - keyboard - 24.0);
+    final safeArea = MediaQuery.paddingOf(context);
+    final available = math.max(
+      160.0,
+      height - keyboard - safeArea.top - safeArea.bottom - 40.0,
+    );
     final dialogHeight = math.min(height * 0.90, available);
 
     return AnimatedPadding(

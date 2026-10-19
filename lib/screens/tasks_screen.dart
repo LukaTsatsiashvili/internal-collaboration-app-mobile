@@ -833,7 +833,10 @@ class _TasksScreenState extends State<TasksScreen> {
             foreground: high ? const Color(0xFFED9A16) : p.secondaryText,
           ),
           if (task['parentTaskId'] == null)
-            PopupMenuButton<String>(
+            AppDropdownTheme(
+              child: PopupMenuButton<String>(
+                position: PopupMenuPosition.under,
+                offset: AppDropdownTheme.menuGap,
               tooltip: 'Move to my group',
               icon: Icon(Icons.more_vert_rounded, color: p.muted, size: 19),
               padding: const EdgeInsets.only(left: 4),
@@ -847,6 +850,7 @@ class _TasksScreenState extends State<TasksScreen> {
                   child: Text(group['name'].toString()),
                 )),
               ],
+              ),
             ),
         ]),
         const SizedBox(height: 11),

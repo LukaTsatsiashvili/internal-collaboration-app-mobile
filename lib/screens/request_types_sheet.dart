@@ -172,7 +172,8 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     );
   }
 
-  Widget _statusDropdown() => PopupMenuButton<String>(
+  Widget _statusDropdown() => LayoutBuilder(
+    builder: (context, layout) => PopupMenuButton<String>(
     tooltip: 'Request type status',
     position: PopupMenuPosition.under,
     offset: const Offset(0, 5),
@@ -182,9 +183,11 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
       borderRadius: BorderRadius.circular(17),
       side: BorderSide(color: _p.cardBorder),
     ),
+    // Bound the overlay to the width of the actual parent control instead
+    // of guessing from the full screen. Never grow wider than this dropdown.
     constraints: BoxConstraints(
-      minWidth: (MediaQuery.sizeOf(context).width - 44)
-          .clamp(180.0, 430.0).toDouble(),
+      minWidth: layout.maxWidth,
+      maxWidth: layout.maxWidth,
       maxHeight: MediaQuery.sizeOf(context).height * 0.48,
     ),
     onSelected: (value) => setState(() => _status = value),
@@ -221,6 +224,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
         ))),
         Icon(Icons.keyboard_arrow_down_rounded, size: 19, color: _p.muted),
       ]),
+    ),
     ),
   );
 

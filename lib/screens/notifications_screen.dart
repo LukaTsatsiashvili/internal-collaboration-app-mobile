@@ -12,12 +12,20 @@ import '../core/theme/app_theme_extensions.dart';
 
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({super.key, this.service, this.openNotificationId});
+  const NotificationsScreen({
+    super.key,
+    this.service,
+    this.openNotificationId,
+    this.onDestinationChanged,
+  });
 
   /// Optional injection for isolated widget tests.
   final NotificationService? service;
   /// Open a Latest Updates item using Inbox's existing read/deep-link flow.
   final String? openNotificationId;
+  /// The shell highlights the linked module while its details are visible.
+  /// Null restores the original tab when the details are dismissed.
+  final ValueChanged<int?>? onDestinationChanged;
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -153,6 +161,11 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     final id = item['id']?.toString();
     if (id == null || id.isEmpty || _busyId != null) return;
     setState(() => _busyId = id);
+    bool highlighted = false;
+    void highlight(int tab) {
+      widget.onDestinationChanged?.call(tab);
+      highlighted = true;
+    }
     try {
       if (item['isRead'] != true) await _service.markRead(id);
       if (!mounted) return;
@@ -173,6 +186,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
           // The task remains accessible without the personal groups list.
         }
         if (!mounted) return;
+        highlight(2); // Tasks
         await showModalBottomSheet<bool>(
           context: context,
           isScrollControlled: true,
@@ -197,6 +211,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         }
         if (selected == null) throw StateError('საუბარი მიუწვდომელია');
         if (!mounted) return;
+        highlight(1); // Messages
         await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => ChatDetailScreen(
             conversationId: conversationId,
@@ -206,6 +221,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
       } else if (uri.path == '/approvals') {
         final requestId = uri.queryParameters['request'];
         if (requestId == null || requestId.isEmpty || !mounted) return;
+        highlight(3); // Approvals
         await Navigator.of(context).push(MaterialPageRoute<void>(
           builder: (_) => ApprovalsScreen(focusRequestId: requestId),
         ));
@@ -213,6 +229,9 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     } catch (error) {
       _message(error.toString().replaceFirst('Exception: ', ''));
     } finally {
+      // Back from any detail (or a failed navigation) restores the previous
+      // bottom-tab highlight; reading status stays managed by the Inbox API.
+      if (highlighted) widget.onDestinationChanged?.call(null);
       if (mounted) {
         setState(() => _busyId = null);
         _load(silent: true);

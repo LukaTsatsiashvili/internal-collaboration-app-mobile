@@ -79,6 +79,58 @@ class TaskService {
     }
   }
 
+  /// Rename only a personal task group owned by the logged-in user.
+  Future<Map<String, dynamic>> renameTaskGroup({
+    required String id,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty || trimmed.length > 120) {
+      throw ArgumentError('Group name must contain 1–120 characters');
+    }
+    try {
+      final response = await _apiClient.dio.patch(
+        '/tasks/groups/${Uri.encodeComponent(id)}',
+        data: <String, dynamic>{'name': trimmed},
+      );
+      final result = response.data;
+      if (result is Map && result['success'] == true &&
+          result['data'] is Map &&
+          result['data']['id']?.toString() == id) {
+        return Map<String, dynamic>.from(result['data'] as Map);
+      }
+      throw StateError('Group rename was not confirmed');
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final issue = data is Map ? data['error'] : null;
+      throw Exception((issue is Map ? issue['message'] : null)?.toString()
+          ?? 'Could not rename task group');
+    }
+  }
+
+  /// Backend archives the group and reassigns its personal task layouts to
+  /// Ungrouped. No task is deleted and no other user's groups are changed.
+  Future<void> deleteTaskGroup(String id) async {
+    try {
+      final response = await _apiClient.dio.delete(
+        '/tasks/groups/${Uri.encodeComponent(id)}',
+        // ApiClient defaults to application/json; send a valid empty object.
+        data: const <String, dynamic>{},
+      );
+      final result = response.data;
+      if (result is! Map || result['success'] != true ||
+          result['data'] is! Map ||
+          result['data']['id']?.toString() != id) {
+        throw StateError('Group deletion was not confirmed');
+      }
+    } on DioException catch (error) {
+      final data = error.response?.data;
+      final issue = data is Map ? data['error'] : null;
+      throw Exception((issue is Map ? issue['message'] : null)?.toString()
+          ?? 'Could not delete task group');
+    }
+  }
+
   // Changing a personal layout never changes the task's department.
   Future<Map<String, dynamic>> moveTaskToGroup(
     String taskId, String? groupId,

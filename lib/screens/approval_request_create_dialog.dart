@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/approvals/data/approval_request_draft.dart';
 import '../features/approvals/data/approval_service.dart';
 
@@ -228,16 +229,16 @@ class _ApprovalRequestCreateDialogState
     required Map<String, String> entries,
     required ValueChanged<String> onSelected,
     required String tooltip,
-  }) => LayoutBuilder(
+  }) => AppDropdownTheme(
+    child: LayoutBuilder(
     builder: (context, bounds) => PopupMenuButton<String>(
     tooltip: tooltip,
     enabled: !_saving && enabled,
     position: PopupMenuPosition.under,
+    offset: AppDropdownTheme.menuGap,
     color: _p.card,
-    constraints: BoxConstraints(
-      minWidth: bounds.maxWidth,
-      maxWidth: bounds.maxWidth,
-      maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+    constraints: AppDropdownTheme.menuBounds(
+      bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(15),
@@ -271,6 +272,7 @@ class _ApprovalRequestCreateDialogState
         Icon(Icons.keyboard_arrow_down_rounded,
           color: _p.link, size: 20),
       ]),
+    ),
     ),
     ),
   );

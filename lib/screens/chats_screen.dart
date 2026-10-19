@@ -15,7 +15,10 @@ import '../core/network/api_client.dart';
 
 // Stitch-inspired messages list. The chat detail, dialog, and networking stay unchanged.
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key});
+  const ChatsScreen({super.key, this.openCreateOnStart = false});
+
+  /// Dashboard quick action opens the existing conversation dialog.
+  final bool openCreateOnStart;
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -53,6 +56,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
   void initState() {
     super.initState();
     _loadData();
+    if (widget.openCreateOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showNewConversationDialog();
+      });
+    }
   }
 
   @override

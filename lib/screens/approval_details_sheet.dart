@@ -748,10 +748,25 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
                       .toString(), maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: _p.ink,
                       fontSize: 18, fontWeight: FontWeight.w800))),
-                  IconButton(
-                    tooltip: 'Close approval details',
-                    onPressed: _busy ? null : () => Navigator.pop(context, _changed),
-                    icon: Icon(Icons.close_rounded, color: _p.muted, size: 19)),
+                  // Match the circular close control used by Request Types
+                  // and the other shared modal headers.
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _p.searchBackground,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      tooltip: 'Close approval details',
+                      padding: EdgeInsets.zero,
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.pop(context, _changed),
+                      icon: Icon(Icons.close_rounded,
+                        color: _p.muted, size: 18),
+                    ),
+                  ),
                 ]),
               ),
               Divider(height: 1, color: _p.cardBorder),

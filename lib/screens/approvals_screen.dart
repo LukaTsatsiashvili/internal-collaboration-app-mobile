@@ -707,16 +707,25 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   }
 
   void _reorderGroups(int oldIndex, int newIndex) {
-    final count = _groupOrder.length;
-    if (oldIndex < 0 || oldIndex >= count) return; // Ungrouped stays last.
+    // Reorder only displayed groups; hidden groups keep their original slots.
+    // The permanently last Ungrouped section is not draggable.
+    final shown = _groupOrder.where((id) =>
+        _advancedFilters.groupIds.isEmpty ||
+        _advancedFilters.groupIds.contains(id)).toList();
+    final count = shown.length;
+    if (oldIndex < 0 || oldIndex >= count) return;
     if (newIndex > oldIndex) newIndex--;
     newIndex = newIndex.clamp(0, count - 1).toInt();
     if (oldIndex == newIndex) return;
+    final id = shown.removeAt(oldIndex);
+    shown.insert(newIndex, id);
     setState(() {
-      final id = _groupOrder.removeAt(oldIndex);
-      _groupOrder.insert(newIndex, id);
+      final visibleIds = shown.toSet();
+      var next = 0;
+      _groupOrder = _groupOrder.map((groupId) =>
+          visibleIds.contains(groupId) ? shown[next++] : groupId).toList();
     });
-    // UI only: nothing is persisted to the backend until functionality phase.
+    // UI-only sorting: do not persist until group reordering is implemented.
   }
 
   static String _statusLabel(String status) {

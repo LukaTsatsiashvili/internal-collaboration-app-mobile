@@ -314,8 +314,9 @@ List<Widget> buildGlobalActions(
   VoidCallback onToggleTheme,
   VoidCallback onChangeLanguage,
   String currentLanguage,
-  ThemeMode currentThemeMode,
-) {
+  ThemeMode currentThemeMode, {
+  ValueChanged<int?>? onNotificationDestinationChanged,
+}) {
   final palette = Theme.of(context).extension<AppPalette>()!;
   return [
     Padding(
@@ -339,7 +340,9 @@ List<Widget> buildGlobalActions(
           onPressed: () async {
             await Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              MaterialPageRoute(builder: (_) => NotificationsScreen(
+                onDestinationChanged: onNotificationDestinationChanged,
+              )),
             );
           },
         ),

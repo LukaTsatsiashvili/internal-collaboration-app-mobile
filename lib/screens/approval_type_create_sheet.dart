@@ -8,19 +8,29 @@ import '../core/theme/app_theme_extensions.dart';
 import '../features/approvals/data/approval_service.dart';
 import '../features/approvals/data/approval_type_draft.dart';
 
-/// Mobile version of the web's New approval type configurator.
-/// Returns true only after the API confirms successful creation.
+/// Mobile version of the web's approval type configurator.
+/// Returns true only after the API confirms successful creation or a new version.
 class ApprovalTypeCreateSheet extends StatefulWidget {
-  const ApprovalTypeCreateSheet({super.key, required this.service});
+  const ApprovalTypeCreateSheet({
+    super.key,
+    required this.service,
+    this.existing,
+  });
 
   final ApprovalService service;
+  final Map<String, dynamic>? existing;
 
   @override
   State<ApprovalTypeCreateSheet> createState() => _ApprovalTypeCreateSheetState();
 }
 
 class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
-  final ApprovalTypeDraft _draft = ApprovalTypeDraft();
+  late final ApprovalTypeDraft _draft;
+  bool get _editing => widget.existing != null;
+  bool get _codeLocked {
+    final count = widget.existing?['_count'];
+    return count is Map && (count['requests'] as num? ?? 0) > 0;
+  }
   final ScrollController _scroll = ScrollController();
   List<dynamic> _users = [];
   String? _usersError;
@@ -33,6 +43,9 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
   @override
   void initState() {
     super.initState();
+    _draft = widget.existing == null
+        ? ApprovalTypeDraft()
+        : ApprovalTypeDraft.fromExisting(widget.existing!);
     _loadUsers();
   }
 
@@ -82,7 +95,13 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
       _error = null;
     });
     try {
-      await widget.service.createApprovalType(_draft.toPayload());
+      if (_editing) {
+        await widget.service.updateApprovalType(
+          widget.existing!['id'].toString(), _draft.toPayload(),
+        );
+      } else {
+        await widget.service.createApprovalType(_draft.toPayload());
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -140,10 +159,11 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
     int maxLines = 1,
     int? maxLength,
     List<TextInputFormatter>? formatters,
+    bool enabled = true,
   }) => TextFormField(
     key: ValueKey(stableKey),
     initialValue: initial,
-    enabled: !_saving,
+    enabled: !_saving && enabled,
     keyboardType: maxLines > 1
         ? TextInputType.multiline : TextInputType.text,
     textInputAction: maxLines > 1
@@ -348,6 +368,12 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
     final selected = step.approverRule == 'USER'
         ? step.approverValue : step.approverRule;
     final choices = _approverOptions;
+    // Older workflow versions can contain ROLE rules even though the web
+    // editor only offers two manager rules and active user IDs.
+    if (step.approverRule == 'ROLE' && step.approverValue.isNotEmpty) {
+      choices['ROLE:${step.approverValue}'] =
+          'Role: ${step.approverValue}';
+    }
     return Container(
       key: ValueKey('approval-step-${step.localId}'),
       margin: const EdgeInsets.only(bottom: 10),
@@ -383,12 +409,16 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
         const SizedBox(height: 9),
         _choice(
           tooltip: 'Step ${index + 1} approver',
-          selectedLabel: choices[selected] ??
+          selectedLabel: choices[step.approverRule == 'ROLE'
+              ? 'ROLE:${step.approverValue}' : selected] ??
               (step.approverRule == 'USER'
                   ? 'Select an active user' : 'Select approver'),
           options: choices,
           onSelected: (value) => _set(() {
-            if (value == 'REQUESTER_MANAGER' ||
+            if (value.startsWith('ROLE:')) {
+              step.approverRule = 'ROLE';
+              step.approverValue = value.substring(5);
+            } else if (value == 'REQUESTER_MANAGER' ||
                 value == 'DEPARTMENT_MANAGER') {
               step.approverRule = value;
               step.approverValue = '';
@@ -437,10 +467,11 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
                   child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2))
               else ...[
-                const Text('Create approval type', style: TextStyle(
-                  color: Colors.white, fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                )),
+                Text(_editing ? 'Save new version' : 'Create approval type',
+                  style: const TextStyle(
+                    color: Colors.white, fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  )),
                 const SizedBox(width: 9),
                 const Icon(Icons.arrow_forward_rounded,
                   size: 18, color: Colors.white),
@@ -497,7 +528,9 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
                         shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 9),
-                    Expanded(child: Text('New approval type',
+                    Expanded(child: Text(
+                      _editing ? 'Edit ${widget.existing!['name']}' : 'New approval type',
+                      maxLines: 1, overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _p.ink, fontSize: 18,
                         fontWeight: FontWeight.w800,
@@ -518,6 +551,25 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
                       ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.fromLTRB(15, 17, 15, 22),
                   children: [
+                    if (_editing) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _p.searchBackground,
+                          border: Border.all(color: _p.cardBorder),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          'Version ${widget.existing!['version']} · '
+                          '${widget.existing!['_count'] is Map ? (widget.existing!['_count']['requests'] ?? 0) : 0} requests. '
+                          'Saving creates a new version; existing requests keep their original workflow.',
+                          style: TextStyle(
+                            color: _p.secondaryText, fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _heading('Name'),
                     _input(
                       initial: _draft.name,
@@ -532,6 +584,7 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
                       initial: _draft.code,
                       hint: 'e.g. BUDGET_REQUEST',
                       stableKey: 'approval-type-code',
+                      enabled: !_codeLocked,
                       maxLength: 50,
                       formatters: [
                         TextInputFormatter.withFunction((oldValue, newValue) =>
@@ -539,6 +592,12 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
                       ],
                       onChanged: (v) => _draft.code = v,
                     ),
+                    if (_codeLocked)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Text('The code is locked because this type is already in use.',
+                          style: TextStyle(color: _p.muted, fontSize: 11)),
+                      ),
                     const SizedBox(height: 12),
                     _heading('Description'),
                     _input(

@@ -14,6 +14,10 @@ class DashboardScreen extends StatefulWidget {
   final String currentLanguage;
   final ThemeMode currentThemeMode;
   final void Function(DashboardQuickAction action)? onQuickAction;
+  /// Navigate to an existing module (without opening a creation modal).
+  final ValueChanged<int>? onNavigateToModule;
+  /// Keeps the floating nav in sync with a notification's details screen.
+  final ValueChanged<int?>? onNotificationDestinationChanged;
   final DashboardService? dashboardService;
   final NotificationService? notificationService;
 
@@ -24,6 +28,8 @@ class DashboardScreen extends StatefulWidget {
     required this.currentLanguage,
     required this.currentThemeMode,
     this.onQuickAction,
+    this.onNavigateToModule,
+    this.onNotificationDestinationChanged,
     this.dashboardService,
     this.notificationService,
   });
@@ -130,6 +136,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => NotificationsScreen(
         openNotificationId: notificationId,
+        onDestinationChanged: widget.onNotificationDestinationChanged,
       ),
     ));
     if (mounted) await _loadUpdates(silent: true);
@@ -179,6 +186,8 @@ class _DashboardScreenState extends State<DashboardScreen>
           widget.onChangeLanguage,
           widget.currentLanguage,
           widget.currentThemeMode,
+          onNotificationDestinationChanged:
+              widget.onNotificationDestinationChanged,
         ),
       ),
       body: RefreshIndicator(
@@ -211,6 +220,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                           _activeTasksCount,
                           Icons.task_alt_rounded,
                           const Color(0xFFEAA229),
+                          onTap: () => widget.onNavigateToModule?.call(2),
+                          cardKey: const ValueKey('dashboard-active-tasks-card'),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -220,6 +231,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                           _pendingApprovalsCount,
                           Icons.assignment_turned_in_outlined,
                           AppColors.primary,
+                          onTap: () => widget.onNavigateToModule?.call(3),
+                          cardKey: const ValueKey('dashboard-pending-approvals-card'),
                         ),
                       ),
                     ],
@@ -494,11 +507,19 @@ class _DashboardScreenState extends State<DashboardScreen>
     String title,
     String value,
     IconData icon,
-    Color accent,
-  ) {
+    Color accent, {
+    required VoidCallback onTap,
+    required Key cardKey,
+  }) {
     final palette = Theme.of(context).extension<AppPalette>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        key: cardKey,
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(23),
+        child: Container(
       constraints: const BoxConstraints(minHeight: 132),
       padding: const EdgeInsets.fromLTRB(13, 12, 11, 12),
       decoration: _panelDecoration(palette),
@@ -552,6 +573,8 @@ class _DashboardScreenState extends State<DashboardScreen>
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

@@ -77,6 +77,7 @@ void main() {
   testWidgets('notification detail is routed inside a shell, not over its bar',
       (tester) async {
     final notifications = FakeShellNotificationService();
+    final highlightedTabs = <int?>[];
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light,
       home: Scaffold(
@@ -87,8 +88,10 @@ void main() {
                 body: Center(child: TextButton(
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
-                      builder: (_) =>
-                          NotificationsScreen(service: notifications),
+                      builder: (_) => NotificationsScreen(
+                        service: notifications,
+                        onDestinationChanged: highlightedTabs.add,
+                      ),
                     ),
                   ),
                   child: const Text('Open notifications'),
@@ -117,6 +120,14 @@ void main() {
     expect(notifications.read, isTrue);
     expect(find.byType(ApprovalsScreen), findsOneWidget);
     expect(find.text('Floating navbar'), findsOneWidget);
+    expect(highlightedTabs, [3]);
+
+    // System Back returns to Inbox and restores the original selected tab.
+    Navigator.of(tester.element(find.byType(ApprovalsScreen))).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(NotificationsScreen), findsOneWidget);
+    expect(highlightedTabs, [3, null]);
 
     await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);

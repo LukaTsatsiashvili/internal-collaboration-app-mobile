@@ -279,7 +279,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
             14, 0, 14, keyboardInset + outerBottomGap,
           ),
           child: Align(
-            alignment: Alignment.bottomCenter,
+            alignment: Alignment.center,
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: 450,

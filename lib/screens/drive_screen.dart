@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../features/drive/data/drive_service.dart';
+import '../core/theme/app_dropdown_theme.dart';
 
 class DriveScreen extends StatefulWidget {
   const DriveScreen({super.key});
@@ -87,13 +88,17 @@ class _DriveScreenState extends State<DriveScreen> {
                                     ),
                                     title: Text(item['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
                                     subtitle: Text('ზომა: ${item['size'] ?? '--'}  •  ${item['date'] ?? ''}'),
-                                    trailing: PopupMenuButton<String>(
+                                    trailing: AppDropdownTheme(
+                                      child: PopupMenuButton<String>(
+                                      position: PopupMenuPosition.under,
+                                      offset: AppDropdownTheme.menuGap,
                                       onSelected: (value) {},
                                       itemBuilder: (context) => [
                                         const PopupMenuItem(value: 'download', child: Text('გადმოწერა')),
                                         const PopupMenuItem(value: 'share', child: Text('გაზიარება')),
                                         const PopupMenuItem(value: 'delete', child: Text('წაშლა', style: TextStyle(color: Colors.red))),
                                       ],
+                                      ),
                                     ),
                                   ),
                                 );

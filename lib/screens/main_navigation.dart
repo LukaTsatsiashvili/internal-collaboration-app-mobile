@@ -34,10 +34,34 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   DashboardQuickAction? _pendingQuickAction;
   int _quickActionLaunchId = 0;
   int _tabNavigationVersion = 0;
+  int? _notificationDestinationIndex;
+
+  /// A notification can show another module within the current shell stack.
+  /// Update only the selected bottom tab, not the navigator's root/key:
+  /// replacing the navigator here would destroy the opened detail route.
+  void _setNotificationDestination(int? index) {
+    if (!mounted || _currentIndex != 0) return;
+    if (index != null && (index < 1 || index > 3)) return;
+    if (_notificationDestinationIndex == index) return;
+    setState(() => _notificationDestinationIndex = index);
+  }
+
+  /// Normal tab navigation (including dashboard metric cards) replaces the
+  /// current stack with that module's root, without opening New Task/Request.
+  void _navigateToTab(int index) {
+    if (!mounted || index < 0 || index > 4) return;
+    setState(() {
+      _currentIndex = index;
+      _pendingQuickAction = null;
+      _notificationDestinationIndex = null;
+      _tabNavigationVersion++;
+    });
+  }
 
   void _launchFromDashboard(DashboardQuickAction action) {
     setState(() {
       _pendingQuickAction = action;
+      _notificationDestinationIndex = null;
       _quickActionLaunchId++;
       _currentIndex = switch (action) {
         DashboardQuickAction.conversation => 1,
@@ -103,7 +127,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
             child: Row(
               children: List.generate(destinations.length, (index) {
-                final selected = _currentIndex == index;
+                final selected =
+                    (_notificationDestinationIndex ?? _currentIndex) == index;
                 return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -139,15 +164,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                             type: MaterialType.transparency,
                             child: InkWell(
                               borderRadius: BorderRadius.circular(22),
-                              onTap: () {
-                                setState(() {
-                                  _currentIndex = index;
-                                  _pendingQuickAction = null;
-                                  // Selecting a tab always returns to that
-                                  // tab's root, even from a notification link.
-                                  _tabNavigationVersion++;
-                                });
-                              },
+                              onTap: () => _navigateToTab(index),
                               child: Center(
                                 child: Icon(
                                   selected
@@ -181,6 +198,8 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         currentLanguage: widget.currentLanguage,
         currentThemeMode: widget.currentThemeMode,
         onQuickAction: _launchFromDashboard,
+        onNavigateToModule: _navigateToTab,
+        onNotificationDestinationChanged: _setNotificationDestination,
       ),
       ChatsScreen(
         key: ValueKey('chat-$_quickActionLaunchId'),

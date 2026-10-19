@@ -290,9 +290,15 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: p.panel,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(28)),
+          borderRadius: BorderRadius.circular(27),
           border: Border.all(color: p.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: _dark ? 0.24 : 0.12),
+              blurRadius: 25,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),
@@ -389,17 +395,29 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                 : _error != null
                     ? SizedBox(
                         height: 118,
-                        child: Center(child: Padding(
-                        padding: const EdgeInsets.all(22),
-                        child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Text(_error!, textAlign: TextAlign.center,
-                            style: TextStyle(color: p.secondaryText,
-                              fontSize: 12)),
-                          const SizedBox(height: 8),
-                          TextButton(onPressed: _load,
-                            child: const Text('Retry')),
-                        ]),
-                      )),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(22),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _error!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: p.secondaryText,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: _load,
+                                  child: const Text('Retry'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       )
                     : RefreshIndicator(
                         onRefresh: _load,

@@ -5,15 +5,26 @@ import '../core/theme/app_theme_extensions.dart';
 /// Dialog owns its controller and returns only a group name.
 /// No API call or ScaffoldMessenger lookup happens inside this route.
 class TaskGroupDialog extends StatefulWidget {
-  const TaskGroupDialog({super.key});
+  const TaskGroupDialog({super.key, this.initialName});
+
+  /// When provided, reuse this visual for the approval group rename flow.
+  final String? initialName;
 
   @override
   State<TaskGroupDialog> createState() => _TaskGroupDialogState();
 }
 
 class _TaskGroupDialogState extends State<TaskGroupDialog> {
-  final TextEditingController _name = TextEditingController();
+  late final TextEditingController _name;
   String? _error;
+
+  bool get _editing => widget.initialName != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _name = TextEditingController(text: widget.initialName ?? '');
+  }
 
   @override
   void dispose() {
@@ -70,7 +81,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      'New Group',
+                      _editing ? 'Rename approval group' : 'New Group',
                       style: TextStyle(
                         color: p.ink,
                         fontSize: 18,
@@ -225,8 +236,8 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                           padding: EdgeInsets.symmetric(horizontal: 19),
                           child: Center(
                             child: Text(
-                              'Create group',
-                              style: TextStyle(
+                              _editing ? 'Save' : 'Create group',
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,

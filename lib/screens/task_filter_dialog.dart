@@ -354,6 +354,8 @@ class _TaskFilterDialogState extends State<TaskFilterDialog> {
                         Expanded(
                           child: Text(
                             choice.value,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: selected == choice.key ? p.link : p.ink,
                               fontSize: 12,

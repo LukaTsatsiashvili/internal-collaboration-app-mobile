@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/approvals/data/approval_service.dart';
 import 'approval_type_create_sheet.dart';
 
@@ -172,11 +173,12 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     );
   }
 
-  Widget _statusDropdown() => LayoutBuilder(
+  Widget _statusDropdown() => AppDropdownTheme(
+    child: LayoutBuilder(
     builder: (context, layout) => PopupMenuButton<String>(
     tooltip: 'Request type status',
     position: PopupMenuPosition.under,
-    offset: const Offset(0, 5),
+    offset: AppDropdownTheme.menuGap,
     color: _p.card,
     elevation: 10,
     shape: RoundedRectangleBorder(
@@ -185,10 +187,8 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     ),
     // Bound the overlay to the width of the actual parent control instead
     // of guessing from the full screen. Never grow wider than this dropdown.
-    constraints: BoxConstraints(
-      minWidth: layout.maxWidth,
-      maxWidth: layout.maxWidth,
-      maxHeight: MediaQuery.sizeOf(context).height * 0.48,
+    constraints: AppDropdownTheme.menuBounds(
+      layout.maxWidth, MediaQuery.sizeOf(context).height * 0.48,
     ),
     onSelected: (value) => setState(() => _status = value),
     itemBuilder: (context) => [
@@ -224,6 +224,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
         ))),
         Icon(Icons.keyboard_arrow_down_rounded, size: 19, color: _p.muted),
       ]),
+    ),
     ),
     ),
   );

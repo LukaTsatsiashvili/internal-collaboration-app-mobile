@@ -279,9 +279,9 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     // The sheet should wrap its content; only the request-type cards scroll.
     // Allow two standard cards (plus list margins) before enabling scrolling.
     const twoCardListHeight = 285.0;
-    // Dialog supplies the Material ancestor required by TextField and
-    // PopupMenuButton. It also centers the content and automatically keeps
-    // it inside the keyboard- and SafeArea-adjusted viewport.
+    // Keep the original bottom-up sheet transition. Material provides the
+    // ancestor required by TextField and PopupMenuButton, while the flexible
+    // list stays capped at two cards and only it scrolls.
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Align(

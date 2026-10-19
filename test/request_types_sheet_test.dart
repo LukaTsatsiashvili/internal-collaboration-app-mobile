@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gtex_collab_app/core/theme/app_theme_extensions.dart';
 import 'package:gtex_collab_app/features/approvals/data/approval_service.dart';
 import 'package:gtex_collab_app/screens/request_types_sheet.dart';
+import 'package:gtex_collab_app/screens/approval_type_create_sheet.dart';
 
 class FakeRequestTypeService extends ApprovalService {
   int loads = 0;
@@ -134,6 +135,14 @@ void main() {
     expect(service.loads, 1);
     expect(find.text('Request Types'), findsOneWidget);
     expect(find.text('All Statuses'), findsOneWidget);
+    final dropdown = tester.widget<PopupMenuButton<String>>(
+      find.byType(PopupMenuButton<String>).first,
+    );
+    final parentWidth = tester.getSize(
+      find.byType(PopupMenuButton<String>).first,
+    ).width;
+    expect(dropdown.constraints?.maxWidth,
+        lessThanOrEqualTo(parentWidth + 0.1));
     expect(find.text('New type'), findsOneWidget);
     expect(find.text('Active request'), findsOneWidget);
     expect(find.text('Edit'), findsWidgets);
@@ -283,6 +292,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Save new version'), findsOneWidget);
+    // Both Create and Edit reuse this Material sheet; its bottom corners
+    // must be rounded even when it is inset from the Android navigation bar.
+    final surfaces = tester.widgetList<Material>(
+      find.descendant(
+        of: find.text('Save new version').evaluate().isNotEmpty
+            ? find.byType(ApprovalTypeCreateSheet)
+            : find.byType(RequestTypesSheet),
+        matching: find.byType(Material),
+      ),
+    );
+    expect(surfaces.any((material) =>
+        material.borderRadius == BorderRadius.circular(26)), isTrue);
     final code = tester.widget<TextFormField>(
         find.byKey(const ValueKey('approval-type-code')));
     expect(code.enabled, isFalse);

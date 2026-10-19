@@ -49,6 +49,15 @@ Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) asyn
   ));
   await tester.tap(find.text('Open types'));
   await tester.pumpAndSettle();
+  // Regression: showDialog previously lacked the required Material ancestor.
+  expect(tester.takeException(), isNull);
+  expect(
+    find.ancestor(
+      of: find.byType(TextField),
+      matching: find.byType(Material),
+    ),
+    findsWidgets,
+  );
 }
 
 void main() {
@@ -131,6 +140,23 @@ void main() {
     await tester.pumpAndSettle();
     final oneCardPanel = tester.getRect(panelFinder);
     expect(oneCardPanel.height, lessThan(allPanel.height));
+  });
+
+  testWidgets('compact dialog stays in bounds on a short phone viewport',
+      (tester) async {
+    tester.view.physicalSize = const Size(360, 560);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final service = FakeRequestTypeService();
+    await showTypes(tester, service);
+    final panel = tester.getRect(
+        find.byKey(const ValueKey('request-types-sheet-panel')));
+    expect(panel.left, greaterThanOrEqualTo(13));
+    expect(panel.right, lessThanOrEqualTo(347));
+    expect(panel.top, greaterThanOrEqualTo(12));
+    expect(panel.bottom, lessThanOrEqualTo(548));
+    expect(tester.takeException(), isNull);
   });
 
 }

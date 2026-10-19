@@ -68,9 +68,11 @@ class _TasksScreenState extends State<TasksScreen> {
   void initState() {
     super.initState();
     _taskService = widget.service ?? TaskService();
-    _loadData();
+    // Wait for personal groups before opening the Dashboard-created form:
+    // otherwise its Group dropdown would be incorrectly empty at launch.
+    final loading = _loadData();
     if (widget.openCreateOnStart) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      loading.then((_) {
         if (mounted) _showNewTaskBottomSheet();
       });
     }

@@ -191,6 +191,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Remember the source navigator generation. An old notification Future
+    // must not overwrite the selected tab if the user has since navigated.
+    final sourceTabVersion = _tabNavigationVersion;
+    final sourceQuickActionVersion = _quickActionLaunchId;
     final List<Widget> screens = [
       DashboardScreen(
         onToggleTheme: widget.onToggleTheme,
@@ -199,7 +203,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         currentThemeMode: widget.currentThemeMode,
         onQuickAction: _launchFromDashboard,
         onNavigateToModule: _navigateToTab,
-        onNotificationDestinationChanged: _setNotificationDestination,
+        onNotificationDestinationChanged: (index) {
+          if (sourceTabVersion != _tabNavigationVersion ||
+              sourceQuickActionVersion != _quickActionLaunchId) {
+            return;
+          }
+          _setNotificationDestination(index);
+        },
       ),
       ChatsScreen(
         key: ValueKey('chat-$_quickActionLaunchId'),

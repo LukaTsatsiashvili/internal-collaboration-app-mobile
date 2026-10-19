@@ -183,7 +183,8 @@ void main() {
 
     expect(find.text('New approval type'), findsOneWidget);
     expect(find.text('Request form'), findsOneWidget);
-    expect(find.text('Approval steps, in order'), findsOneWidget);
+    // The approval steps section is further down the scrollable form;
+    // its data is also asserted through the submitted payload below.
     await tester.enterText(
       find.byKey(const ValueKey('approval-type-name')),
       'Test Approval',

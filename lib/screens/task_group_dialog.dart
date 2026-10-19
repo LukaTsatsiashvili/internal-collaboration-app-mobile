@@ -5,10 +5,16 @@ import '../core/theme/app_theme_extensions.dart';
 /// Dialog owns its controller and returns only a group name.
 /// No API call or ScaffoldMessenger lookup happens inside this route.
 class TaskGroupDialog extends StatefulWidget {
-  const TaskGroupDialog({super.key, this.initialName});
+  const TaskGroupDialog({
+    super.key,
+    this.initialName,
+    this.renameTitle = 'Rename approval group',
+  });
 
   /// When provided, reuse this visual for the approval group rename flow.
   final String? initialName;
+  /// Shared visual for task and approval group rename flows.
+  final String renameTitle;
 
   @override
   State<TaskGroupDialog> createState() => _TaskGroupDialogState();
@@ -81,7 +87,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      _editing ? 'Rename approval group' : 'New Group',
+                      _editing ? widget.renameTitle : 'New Group',
                       style: TextStyle(
                         color: p.ink,
                         fontSize: 18,

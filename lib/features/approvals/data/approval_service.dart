@@ -35,6 +35,15 @@ class ApprovalService {
     return response.data['data'] as List<dynamic>;
   }
 
+  /// Populate all request types in the advanced filter, not only used ones.
+  Future<List<dynamic>> getApprovalTypes() async {
+    final response = await _apiClient.dio.get('/approval-types');
+    if (response.data['success'] != true || response.data['data'] is! List) {
+      throw StateError('Approval types could not be loaded');
+    }
+    return response.data['data'] as List<dynamic>;
+  }
+
   /// Used only to display current-user quick filters, as on the web page.
   Future<String> getCurrentUserId() async {
     final response = await _apiClient.dio.get('/auth/me');

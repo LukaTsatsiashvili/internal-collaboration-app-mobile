@@ -12,10 +12,12 @@ import 'task_advanced_filters.dart';
 import '../features/tasks/data/task_service.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({super.key, this.service});
+  const TasksScreen({super.key, this.service, this.openCreateOnStart = false});
 
   /// Optional service injection keeps group workflows testable.
   final TaskService? service;
+  /// Dashboard quick action opens the existing task creation sheet.
+  final bool openCreateOnStart;
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
@@ -67,6 +69,11 @@ class _TasksScreenState extends State<TasksScreen> {
     super.initState();
     _taskService = widget.service ?? TaskService();
     _loadData();
+    if (widget.openCreateOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showNewTaskBottomSheet();
+      });
+    }
   }
 
   Future<void> _loadData() async {

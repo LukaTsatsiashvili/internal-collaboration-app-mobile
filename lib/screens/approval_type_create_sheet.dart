@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/approvals/data/approval_service.dart';
 import '../features/approvals/data/approval_type_draft.dart';
 
@@ -186,16 +187,16 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
     required Map<String, String> options,
     required ValueChanged<String> onSelected,
     String? tooltip,
-  }) => LayoutBuilder(
+  }) => AppDropdownTheme(
+    child: LayoutBuilder(
     builder: (context, bounds) => PopupMenuButton<String>(
     tooltip: tooltip ?? 'Select option',
     enabled: !_saving,
     position: PopupMenuPosition.under,
+    offset: AppDropdownTheme.menuGap,
     color: _p.card,
-    constraints: BoxConstraints(
-      minWidth: bounds.maxWidth,
-      maxWidth: bounds.maxWidth,
-      maxHeight: MediaQuery.sizeOf(context).height * 0.55,
+    constraints: AppDropdownTheme.menuBounds(
+      bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(15),
@@ -232,6 +233,7 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
         const SizedBox(width: 6),
         Icon(Icons.keyboard_arrow_down_rounded, color: _p.link, size: 19),
       ]),
+    ),
     ),
     ),
   );

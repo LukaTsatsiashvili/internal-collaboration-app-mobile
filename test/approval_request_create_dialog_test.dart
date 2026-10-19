@@ -12,6 +12,34 @@ class FakeApprovalRequestService extends ApprovalService {
   int uploads = 0;
   String? uploadedName;
   int typeFetches = 0;
+  final revisions = <Map<String, dynamic>>[];
+  final submissions = <Map<String, dynamic>>[];
+  int currentRevision = 5;
+
+  @override
+  Future<void> reviseApprovalRequest({
+    required String id,
+    required int revision,
+    required String title,
+    required Map<String, dynamic> data,
+  }) async {
+    revisions.add({
+      'id': id, 'revision': revision, 'title': title, 'data': data,
+    });
+    currentRevision++;
+  }
+
+  @override
+  Future<Map<String, dynamic>> getApprovalRequest(String id) async =>
+      {'id': id, 'revision': currentRevision};
+
+  @override
+  Future<void> submitExistingApproval({
+    required String id,
+    required int revision,
+  }) async {
+    submissions.add({'id': id, 'revision': revision});
+  }
 
   @override
   Future<String> uploadApprovalAttachment(
@@ -181,6 +209,51 @@ void main() {
     expect(popup.constraints!.maxWidth,
         lessThanOrEqualTo(parentWidth + 0.1));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('revising a request PATCHes then submits the fresh revision',
+      (tester) async {
+    final service = FakeApprovalRequestService();
+    final existing = <String, dynamic>{
+      'id': 'request-1',
+      'title': 'Old title',
+      'revision': 5,
+      'approvalTypeId': 'type-1',
+      'data': {'reason': 'Need approval'},
+      'workflowSnapshot': {
+        'type': {'name': 'Budget request', 'version': 1},
+        'formSchema': {
+          'reason': {'label': 'Reason', 'type': 'textarea', 'required': true},
+        },
+      },
+    };
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: Scaffold(body: Builder(builder: (context) => ElevatedButton(
+        onPressed: () => showDialog<bool>(
+          context: context,
+          builder: (_) => ApprovalRequestCreateDialog(
+            service: service, existing: existing,
+          ),
+        ),
+        child: const Text('Open edit request'),
+      ))),
+    ));
+    await tester.tap(find.text('Open edit request'));
+    await tester.pumpAndSettle();
+    expect(find.text('Revise request'), findsOneWidget);
+    await tester.enterText(
+      find.byKey(const ValueKey('new-approval-request-title')), 'New title');
+    await tester.tap(find.text('Submit request'));
+    await tester.pumpAndSettle();
+
+    expect(service.revisions, hasLength(1));
+    expect(service.revisions.single['revision'], 5);
+    expect(service.revisions.single['title'], 'New title');
+    expect(service.submissions, [
+      {'id': 'request-1', 'revision': 6},
+    ]);
+    expect(service.saved, isEmpty); // Did not POST a new request.
   });
 
 }

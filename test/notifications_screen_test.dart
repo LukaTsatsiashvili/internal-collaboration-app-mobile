@@ -86,6 +86,22 @@ void main() {
     expect(find.text('Task from server'), findsNothing);
   });
 
+  testWidgets('Dashboard Latest Update automatically marks selected item read',
+      (tester) async {
+    final service = FakeNotificationService();
+    await tester.pumpWidget(MaterialApp(
+      home: NotificationsScreen(
+        service: service,
+        openNotificationId: 'task-1',
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(service.data.first['isRead'], isTrue);
+    expect(service.data[1]['isRead'], isFalse);
+    expect(find.text('Unread (1)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('read and unread statuses use the service', (tester) async {
     final service = FakeNotificationService();
     await tester.pumpWidget(

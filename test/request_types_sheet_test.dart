@@ -38,11 +38,9 @@ Future<void> showTypes(WidgetTester tester, FakeRequestTypeService service) asyn
     theme: ThemeData(extensions: const [AppPalette.light]),
     home: Scaffold(body: Builder(
       builder: (context) => Center(child: ElevatedButton(
-        onPressed: () => showModalBottomSheet<void>(
+        onPressed: () => showDialog<void>(
           context: context,
           useSafeArea: true,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
           builder: (_) => RequestTypesSheet(service: service),
         ),
         child: const Text('Open types'),
@@ -118,6 +116,7 @@ void main() {
     expect(allPanel.left, greaterThanOrEqualTo(13));
     expect(allPanel.right, lessThanOrEqualTo(screenWidth - 13));
     expect(allPanel.bottom, lessThan(screenHeight));
+    expect((allPanel.center.dy - screenHeight / 2).abs(), lessThan(40));
     expect(list.height, lessThanOrEqualTo(285.1));
 
     // Cards beyond the initial two remain accessible inside the list.

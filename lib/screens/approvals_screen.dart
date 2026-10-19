@@ -12,13 +12,16 @@ import 'approval_request_create_dialog.dart';
 import 'approval_details_sheet.dart';
 
 class ApprovalsScreen extends StatefulWidget {
-  const ApprovalsScreen({super.key, this.focusRequestId, this.service});
+  const ApprovalsScreen({super.key, this.focusRequestId, this.service,
+    this.openCreateOnStart = false});
 
   /// Allows UI tests to supply read-only approval data.
   final ApprovalService? service;
 
   /// Optional request ID supplied by the notification deep link.
   final String? focusRequestId;
+  /// Dashboard quick action opens the existing New Request dialog.
+  final bool openCreateOnStart;
 
   @override
   State<ApprovalsScreen> createState() => _ApprovalsScreenState();
@@ -49,6 +52,11 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     super.initState();
     _approvalService = widget.service ?? ApprovalService();
     _fetchApprovals();
+    if (widget.openCreateOnStart) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openNewRequestDialog();
+      });
+    }
   }
 
   Future<void> _fetchApprovals() async {

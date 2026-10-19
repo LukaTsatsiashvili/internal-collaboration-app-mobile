@@ -93,4 +93,52 @@ void main() {
     expect(draft.addStep(), isFalse);
     expect(draft.validate(users: activeUsers), isNull);
   });
+  test('editing a stored type restores its form fields and steps in order', () {
+    final draft = ApprovalTypeDraft.fromExisting({
+      'name': 'Purchase approval',
+      'code': 'PURCHASE',
+      'description': 'Buy equipment',
+      'formSchema': {
+        'amount': {
+          'type': 'number', 'label': 'Amount', 'required': true,
+        },
+        'reason': {
+          'type': 'select', 'label': 'Reason', 'required': false,
+          'options': ['Office', 'Store'],
+        },
+      },
+      'steps': [
+        {'stepNumber': 2, 'name': 'Finance review',
+          'approverRule': 'USER', 'approverValue': 'admin-1'},
+        {'stepNumber': 1, 'name': 'Manager review',
+          'approverRule': 'REQUESTER_MANAGER', 'approverValue': null},
+      ],
+    });
+    expect(draft.fields.map((f) => f.keyName),
+        ['amount', 'reason']);
+    expect(draft.fields.last.options, ['Office', 'Store']);
+    expect(draft.steps.first.name, 'Manager review');
+    expect(draft.steps.last.approverRule, 'USER');
+    expect(draft.validate(users: activeUsers), isNull);
+    final payload = draft.toPayload();
+    expect(payload['steps'][0]['stepNumber'], 1);
+    expect(payload['steps'][1]['stepNumber'], 2);
+    expect(payload['steps'][1]['approverValue'], 'admin-1');
+  });
+
+  test('editing older ROLE approver definitions preserves role code', () {
+    final draft = ApprovalTypeDraft.fromExisting({
+      'name': 'Role approval',
+      'code': 'ROLE_APPROVAL',
+      'formSchema': {},
+      'steps': [
+        {'stepNumber': 1, 'name': 'Finance review',
+          'approverRule': 'ROLE', 'approverValue': 'FINANCE'},
+      ],
+    });
+    expect(draft.validate(users: activeUsers), isNull);
+    expect(draft.toPayload()['steps'][0]['approverRule'], 'ROLE');
+    expect(draft.toPayload()['steps'][0]['approverValue'], 'FINANCE');
+  });
+
 }

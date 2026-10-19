@@ -501,12 +501,12 @@ class _ApprovalTypeCreateSheetState extends State<ApprovalTypeCreateSheet> {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          // Leave space below the sheet so the bottom radius is visible.
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
           child: Material(
             color: _p.panel,
             clipBehavior: Clip.antiAlias,
-            borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(26)),
+            borderRadius: BorderRadius.circular(26),
             child: SizedBox(
               height: dialogHeight,
               child: Column(children: [

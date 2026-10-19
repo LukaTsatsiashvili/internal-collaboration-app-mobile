@@ -26,6 +26,25 @@ class ApprovalService {
     return [];
   }
 
+  /// Read-only data for the existing personal-group UI. No mutations.
+  Future<List<dynamic>> getApprovalGroups() async {
+    final response = await _apiClient.dio.get('/approval-groups');
+    if (response.data['success'] != true || response.data['data'] is! List) {
+      throw StateError('Approval groups could not be loaded');
+    }
+    return response.data['data'] as List<dynamic>;
+  }
+
+  /// Used only to display current-user quick filters, as on the web page.
+  Future<String> getCurrentUserId() async {
+    final response = await _apiClient.dio.get('/auth/me');
+    final id = response.data['data']?['id']?.toString();
+    if (response.data['success'] != true || id == null || id.isEmpty) {
+      throw StateError('Current user is unavailable');
+    }
+    return id;
+  }
+
   // 2. მოთხოვნაზე მოქმედების შესრულება: დამტკიცება/უარყოფა (POST /approval-requests/:id/actions)
   Future<void> performAction({
     required String requestId,

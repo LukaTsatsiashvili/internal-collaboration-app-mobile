@@ -7,6 +7,7 @@ import 'approval_advanced_filters.dart';
 import 'approval_filter_dialog.dart';
 import 'task_group_dialog.dart';
 import 'request_types_sheet.dart';
+import 'approval_request_create_dialog.dart';
 
 class ApprovalsScreen extends StatefulWidget {
   const ApprovalsScreen({super.key, this.focusRequestId, this.service});
@@ -313,6 +314,21 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     ]),
   );
 
+  Future<void> _openNewRequestDialog() async {
+    final created = await showDialog<bool>(
+      context: context,
+      useSafeArea: true,
+      barrierDismissible: false,
+      builder: (_) => ApprovalRequestCreateDialog(service: _approvalService),
+    );
+    if (!mounted || created != true) return;
+    await _fetchApprovals();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Approval request saved successfully')),
+    );
+  }
+
   Future<void> _openRequestTypesSheet() async {
     // Restore the original smooth bottom-up transition rather than showDialog.
     await showModalBottomSheet<void>(
@@ -388,7 +404,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 3),
       children: [
-        _actionButton('New request', Icons.add_rounded, primary: true),
+        _actionButton('New request', Icons.add_rounded, primary: true,
+          onPressed: () { _openNewRequestDialog(); }),
         const SizedBox(width: 7),
         _actionButton('Request types', Icons.tune_rounded,
           onPressed: () { _openRequestTypesSheet(); }),

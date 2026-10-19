@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
@@ -180,13 +178,15 @@ class _ApprovalRequestCreateDialogState
     required Map<String, String> entries,
     required ValueChanged<String> onSelected,
     required String tooltip,
-  }) => PopupMenuButton<String>(
+  }) => LayoutBuilder(
+    builder: (context, bounds) => PopupMenuButton<String>(
     tooltip: tooltip,
     enabled: !_saving,
     position: PopupMenuPosition.under,
     color: _p.card,
     constraints: BoxConstraints(
-      maxWidth: math.max(0.0, MediaQuery.sizeOf(context).width - 40),
+      minWidth: bounds.maxWidth,
+      maxWidth: bounds.maxWidth,
       maxHeight: MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(
@@ -221,6 +221,7 @@ class _ApprovalRequestCreateDialogState
         Icon(Icons.keyboard_arrow_down_rounded,
           color: _p.link, size: 20),
       ]),
+    ),
     ),
   );
 

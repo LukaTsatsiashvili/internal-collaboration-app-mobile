@@ -36,6 +36,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   int _loadVersion = 0;
   
   bool _isCreatingGroup = false;
+  String? _busyGroupId;
   bool _isLoading = true;
   List<dynamic> _requests = [];
   String? _errorMessage;
@@ -153,72 +154,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       ),
     );
   }
-
-  void _handleActionDialog(String requestId, String title) {
-    final commentController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('განხილვა: $title'),
-        content: TextField(
-          controller: commentController,
-          decoration: const InputDecoration(
-            labelText: 'კომენტარი (არასავალდებულო)',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 3,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('გაუქმება'),
-          ),
-          FilledButton.tonal(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.errorContainer,
-              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
-            ),
-            onPressed: () async {
-              Navigator.pop(context);
-              await _submitAction(requestId, 'REJECT', commentController.text);
-            },
-            child: const Text('უარყოფა'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _submitAction(requestId, 'APPROVE', commentController.text);
-            },
-            child: const Text('დამტკიცება'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _submitAction(String requestId, String action, String comment) async {
-    try {
-      await _approvalService.performAction(
-        requestId: requestId,
-        action: action,
-        comment: comment.isEmpty ? null : comment,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ოპერაცია წარმატებით შესრულდა')),
-        );
-        _fetchApprovals();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
-        );
-      }
-    }
-  }
-
 
   AppPalette get _p => Theme.of(context).extension<AppPalette>()!;
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
@@ -394,6 +329,105 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       ));
     } finally {
       if (mounted) setState(() => _isCreatingGroup = false);
+    }
+  }
+
+  Future<void> _renameGroup(String id, String name) async {
+    if (_busyGroupId != null) return;
+    final updatedName = await showDialog<String>(
+      context: context,
+      builder: (_) => TaskGroupDialog(initialName: name),
+    );
+    if (!mounted || updatedName == null || updatedName == name ||
+        _busyGroupId != null) return;
+    setState(() => _busyGroupId = id);
+    try {
+      final updated = await _approvalService.renameApprovalGroup(
+        id: id, name: updatedName,
+      );
+      if (!mounted) return;
+      setState(() {
+        _groups = [
+          for (final group in _groups)
+            if (group is Map && group['id']?.toString() == id)
+              updated
+            else
+              group,
+        ];
+      });
+      // Refresh server state while retaining the existing filters and order.
+      await _fetchApprovals();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ჯგუფის სახელი განახლებულია')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _busyGroupId = null);
+    }
+  }
+
+  Future<void> _deleteGroup(String id, String name) async {
+    if (_busyGroupId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _p.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: _p.cardBorder),
+        ),
+        title: Text('Delete “$name”?', style: TextStyle(color: _p.ink)),
+        content: Text(
+          'Your approvals in this group will move to Ungrouped. '
+          'Other users are not affected.',
+          style: TextStyle(color: _p.secondaryText, fontSize: 12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Delete', style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontWeight: FontWeight.w700,
+            )),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true || _busyGroupId != null) return;
+    setState(() => _busyGroupId = id);
+    try {
+      await _approvalService.deleteApprovalGroup(id);
+      if (!mounted) return;
+      setState(() {
+        _groups = _groups.where((group) =>
+            group is! Map || group['id']?.toString() != id).toList();
+        _groupOrder.remove(id);
+        _advancedFilters.groupIds.remove(id);
+      });
+      // Backend moves this user's personal request layouts to Ungrouped.
+      await _fetchApprovals();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ჯგუფი წაიშალა; მოთხოვნები გადავიდა Ungrouped-ში')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _busyGroupId = null);
     }
   }
 
@@ -901,7 +935,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   Widget _requestCard(dynamic request) {
     final status = (request['status'] ?? 'DRAFT').toString();
     final title = (request['title'] ?? 'Request').toString();
-    final id = (request['id'] ?? '').toString();
     final type = _typeName(request);
     final requester = _requester(request);
     return Padding(
@@ -956,25 +989,6 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   color: _p.muted, fontSize: 10,
                   fontWeight: FontWeight.w600,
                 )),
-                // Preserve the pre-existing approval/rejection action without
-                // changing its API or confirmation dialog logic.
-                PopupMenuButton<String>(
-                  tooltip: 'Approval actions',
-                  padding: EdgeInsets.zero,
-                  iconSize: 18,
-                  icon: Icon(Icons.more_vert_rounded,
-                    color: _p.muted, size: 18),
-                  color: _p.card,
-                  onSelected: (value) {
-                    if (value == 'review') _handleActionDialog(id, title);
-                  },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem<String>(
-                      value: 'review',
-                      child: Text('Review request'),
-                    ),
-                  ],
-                ),
               ]),
             ]),
           ),
@@ -1026,11 +1040,31 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                     ),
                   ),
                 ),
-                Icon(Icons.edit_outlined, color: _p.muted, size: 16),
-                const SizedBox(width: 8),
-                Icon(Icons.delete_outline_rounded,
-                  color: _p.muted, size: 17),
-                const SizedBox(width: 3),
+                IconButton(
+                  key: ValueKey('edit-approval-group-$id'),
+                  tooltip: 'Rename $name',
+                  icon: Icon(Icons.edit_outlined, color: _p.muted, size: 17),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minHeight: 32, minWidth: 32,
+                  ),
+                  onPressed: _busyGroupId != null
+                      ? null : () => _renameGroup(id, name),
+                ),
+                IconButton(
+                  key: ValueKey('delete-approval-group-$id'),
+                  tooltip: 'Delete $name',
+                  icon: Icon(Icons.delete_outline_rounded,
+                    color: _p.muted, size: 18),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minHeight: 32, minWidth: 32,
+                  ),
+                  onPressed: _busyGroupId != null
+                      ? null : () => _deleteGroup(id, name),
+                ),
               ])
             : null,
         children: requests.isEmpty

@@ -261,14 +261,31 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
   @override
   Widget build(BuildContext context) {
     final p = _p;
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: FractionallySizedBox(
-        heightFactor: 0.9,
-      alignment: Alignment.bottomCenter,
-      child: Container(
+    // The sheet should wrap its content; only the request-type cards scroll.
+    // Allow two standard cards (plus list margins) before enabling scrolling.
+    const twoCardListHeight = 285.0;
+    return LayoutBuilder(
+      builder: (context, bounds) {
+        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+        final safeBottom = MediaQuery.paddingOf(context).bottom;
+        final outerBottomGap = 14.0 + safeBottom;
+        final availableHeight =
+            (bounds.maxHeight - keyboardInset - outerBottomGap - 14.0)
+                .clamp(0.0, bounds.maxHeight);
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.fromLTRB(
+            14, 0, 14, keyboardInset + outerBottomGap,
+          ),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 450,
+                maxHeight: availableHeight,
+              ),
+              child: Container(
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: p.panel,
@@ -276,7 +293,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
             top: Radius.circular(28)),
           border: Border.all(color: p.cardBorder),
         ),
-        child: Column(children: [
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 10),
           Container(
             width: 34, height: 4,
@@ -288,7 +305,15 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 12, 12, 14),
             child: Row(children: [
-              Expanded(child: Text('Request types', style: TextStyle(
+              Container(
+                height: 8, width: 8,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF89B0FF),
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(child: Text('Request Types', style: TextStyle(
                 color: p.ink,
                 fontSize: 18, fontWeight: FontWeight.w800,
                 letterSpacing: -0.4,
@@ -351,11 +376,19 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
               ],
             ),
           ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
+          Flexible(
+            fit: FlexFit.loose,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: twoCardListHeight),
+              child: _loading
+                ? const SizedBox(
+                    height: 88,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
                 : _error != null
-                    ? Center(child: Padding(
+                    ? SizedBox(
+                        height: 118,
+                        child: Center(child: Padding(
                         padding: const EdgeInsets.all(22),
                         child: Column(mainAxisSize: MainAxisSize.min, children: [
                           Text(_error!, textAlign: TextAlign.center,
@@ -365,13 +398,15 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                           TextButton(onPressed: _load,
                             child: const Text('Retry')),
                         ]),
-                      ))
+                      )),
+                      )
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.separated(
                           keyboardDismissBehavior:
                               ScrollViewKeyboardDismissBehavior.onDrag,
                           physics: const AlwaysScrollableScrollPhysics(),
+                          shrinkWrap: true,
                           padding: const EdgeInsets.fromLTRB(19, 5, 19, 20),
                           itemCount: _visibleTypes.isEmpty
                               ? 1 : _visibleTypes.length,
@@ -392,11 +427,15 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                           },
                         ),
                       ),
+            ),
           ),
-          SizedBox(height: MediaQuery.paddingOf(context).bottom),
+          const SizedBox(height: 14),
         ]),
-      ),
-      ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

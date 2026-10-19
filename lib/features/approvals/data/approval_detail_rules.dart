@@ -57,14 +57,15 @@ class ApprovalDetailRules {
     final snapshot = request['workflowSnapshot'];
     final type = snapshot is Map ? snapshot['type'] : null;
     final fallback = request['approvalType'];
-    return (type is Map ? type['name'] : null ??
-        (fallback is Map ? fallback['name'] : null) ?? 'Request').toString();
+    final name = type is Map ? type['name'] : null;
+    return (name ?? (fallback is Map ? fallback['name'] : null)
+        ?? 'Request').toString();
   }
 
   String get typeVersion {
     final snapshot = request['workflowSnapshot'];
     final type = snapshot is Map ? snapshot['type'] : null;
-    return (type is Map ? type['version'] : null ??
-        request['approvalTypeVersion'] ?? 1).toString();
+    final version = type is Map ? type['version'] : null;
+    return (version ?? request['approvalTypeVersion'] ?? 1).toString();
   }
 }

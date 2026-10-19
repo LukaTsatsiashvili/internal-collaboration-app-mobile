@@ -12,8 +12,11 @@ class ApprovalRequestCreateDialog extends StatefulWidget {
     super.key,
     required this.service,
     this.filePicker,
+    this.existing,
   });
   final ApprovalService service;
+  /// Non-null when editing a draft or changes-requested approval.
+  final Map<String, dynamic>? existing;
 
   /// Injectable for tests; production uses the platform's file_selector.
   final Future<XFile?> Function()? filePicker;
@@ -35,10 +38,23 @@ class _ApprovalRequestCreateDialogState
   String? _error;
 
   AppPalette get _p => Theme.of(context).extension<AppPalette>()!;
+  bool get _editing => widget.existing != null;
 
   @override
   void initState() {
     super.initState();
+    if (_editing) {
+      final existing = widget.existing!;
+      _draft.approvalTypeId = existing['approvalTypeId']?.toString() ?? '';
+      _draft.title = existing['title']?.toString() ?? '';
+      _title.text = _draft.title;
+      final data = existing['data'];
+      if (data is Map) {
+        _draft.values.addAll({
+          for (final entry in data.entries) entry.key.toString(): entry.value,
+        });
+      }
+    }
     _loadTypes();
   }
 
@@ -68,6 +84,14 @@ class _ApprovalRequestCreateDialogState
   }
 
   Map<dynamic, dynamic>? get _selectedType {
+    if (_editing) {
+      final snapshot = widget.existing!['workflowSnapshot'];
+      final type = snapshot is Map ? snapshot['type'] : null;
+      return {
+        'id': widget.existing!['approvalTypeId'],
+        'name': type is Map ? (type['name'] ?? 'Request') : 'Request',
+      };
+    }
     for (final item in _types) {
       if (item is Map && item['id']?.toString() == _draft.approvalTypeId) {
         return item;
@@ -77,6 +101,14 @@ class _ApprovalRequestCreateDialogState
   }
 
   Map<dynamic, dynamic>? get _schema {
+    if (_editing) {
+      final snapshot = widget.existing!['workflowSnapshot'];
+      final frozen = snapshot is Map ? snapshot['formSchema'] : null;
+      if (frozen is Map) return frozen;
+      final type = widget.existing!['approvalType'];
+      final fallback = type is Map ? type['formSchema'] : null;
+      if (fallback is Map) return fallback;
+    }
     final value = _selectedType?['formSchema'];
     return value is Map ? value : null;
   }
@@ -120,20 +152,37 @@ class _ApprovalRequestCreateDialogState
     FocusScope.of(context).unfocus();
     setState(() { _saving = true; _error = null; });
     try {
-      final attachmentIds = <String>[];
-      if (_file != null) {
-        final bytes = await _file!.readAsBytes();
-        final id = await widget.service.uploadApprovalAttachment(
-            bytes, _file!.name);
-        attachmentIds.add(id);
+      final submittedValues = _draft.submittedValues(_schema!);
+      if (_editing) {
+        final id = widget.existing!['id'].toString();
+        final revision = (widget.existing!['revision'] as num).toInt();
+        await widget.service.reviseApprovalRequest(
+          id: id, revision: revision, title: _draft.title,
+          data: submittedValues,
+        );
+        if (submit) {
+          // PATCH increments revision, so reload before submitting.
+          final fresh = await widget.service.getApprovalRequest(id);
+          await widget.service.submitExistingApproval(
+            id: id, revision: (fresh['revision'] as num).toInt(),
+          );
+        }
+      } else {
+        final attachmentIds = <String>[];
+        if (_file != null) {
+          final bytes = await _file!.readAsBytes();
+          final id = await widget.service.uploadApprovalAttachment(
+              bytes, _file!.name);
+          attachmentIds.add(id);
+        }
+        await widget.service.createApprovalRequest(
+          approvalTypeId: _draft.approvalTypeId,
+          title: _draft.title,
+          data: submittedValues,
+          submit: submit,
+          attachmentIds: attachmentIds,
+        );
       }
-      await widget.service.createApprovalRequest(
-        approvalTypeId: _draft.approvalTypeId,
-        title: _draft.title,
-        data: _draft.submittedValues(_schema!),
-        submit: submit,
-        attachmentIds: attachmentIds,
-      );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -174,6 +223,7 @@ class _ApprovalRequestCreateDialogState
 
   /// Existing app style for dropdowns, including choices longer than screen.
   Widget _menu({
+    bool enabled = true,
     required String selectedLabel,
     required Map<String, String> entries,
     required ValueChanged<String> onSelected,
@@ -181,7 +231,7 @@ class _ApprovalRequestCreateDialogState
   }) => LayoutBuilder(
     builder: (context, bounds) => PopupMenuButton<String>(
     tooltip: tooltip,
-    enabled: !_saving,
+    enabled: !_saving && enabled,
     position: PopupMenuPosition.under,
     color: _p.card,
     constraints: BoxConstraints(
@@ -389,7 +439,8 @@ class _ApprovalRequestCreateDialogState
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle, color: Color(0xFF89B0FF))),
               const SizedBox(width: 9),
-              Expanded(child: Text('New request', style: TextStyle(
+              Expanded(child: Text(
+                _editing ? 'Revise request' : 'New request', style: TextStyle(
                 color: _p.ink, fontSize: 18, fontWeight: FontWeight.w800))),
               IconButton(
                 tooltip: 'Close new request',
@@ -409,11 +460,12 @@ class _ApprovalRequestCreateDialogState
               child: Column(crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _label('Request type'),
-                  if (_loading)
+                  if (_loading && !_editing)
                     const SizedBox(height: 46,
                       child: Center(child: LinearProgressIndicator()))
                   else ...[
                     _menu(
+                      enabled: !_editing,
                       tooltip: 'Choose request type',
                       selectedLabel: (_selectedType?['name'] ?? 'Choose a type')
                           .toString(),
@@ -453,6 +505,7 @@ class _ApprovalRequestCreateDialogState
                         _dynamicField(entry.key.toString(), entry.value as Map),
                   ],
                   const SizedBox(height: 15),
+                  if (!_editing) ...[
                   _label('Attachment (optional)'),
                   InkWell(
                     onTap: _saving ? null : _pickAttachment,
@@ -489,6 +542,7 @@ class _ApprovalRequestCreateDialogState
                       ]),
                     ),
                   ),
+                  ],
                 ],
               ),
             ),

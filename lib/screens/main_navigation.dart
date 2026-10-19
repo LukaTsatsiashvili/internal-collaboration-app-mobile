@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import 'dashboard_screen.dart';
 import 'chats_screen.dart';
 import 'tasks_screen.dart';
@@ -275,7 +276,8 @@ List<Widget> buildGlobalActions(
     ),
     Padding(
       padding: const EdgeInsets.only(right: 14),
-      child: PopupMenuButton<String>(
+      child: AppDropdownTheme(
+        child: PopupMenuButton<String>(
         tooltip: 'პროფილის მენიუ',
         offset: const Offset(0, 46),
         elevation: 9,
@@ -367,6 +369,7 @@ List<Widget> buildGlobalActions(
             color: Colors.white,
             size: 23,
           ),
+        ),
         ),
       ),
     ),

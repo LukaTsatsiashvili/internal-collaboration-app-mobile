@@ -34,11 +34,13 @@ class TaskCreationDraft {
 class TaskCreateSheet extends StatefulWidget {
   final TaskService service;
   final List<dynamic> groups;
+  final String? initialGroupId;
 
   const TaskCreateSheet({
     super.key,
     required this.service,
     required this.groups,
+    this.initialGroupId,
   });
 
   @override
@@ -64,6 +66,12 @@ class _TaskCreateSheetState extends State<TaskCreateSheet> {
   void initState() {
     super.initState();
     // Loading once prevents every checkbox/date selection from calling the API.
+    // Group-specific + Add Task preselects its personal group, while the
+    // global New Task action retains the existing Ungrouped default.
+    _groupId = widget.groups.any((group) =>
+        group is Map && group['id']?.toString() == widget.initialGroupId)
+        ? widget.initialGroupId
+        : null;
     _usersFuture = widget.service.getUsers();
   }
 

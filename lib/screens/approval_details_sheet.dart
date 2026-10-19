@@ -16,9 +16,12 @@ class ApprovalDetailsSheet extends StatefulWidget {
     super.key,
     required this.requestId,
     required this.service,
+    this.onChanged,
   });
   final String requestId;
   final ApprovalService service;
+  /// Allows list/group counts to refresh even if sheet is swiped away.
+  final VoidCallback? onChanged;
 
   @override
   State<ApprovalDetailsSheet> createState() => _ApprovalDetailsSheetState();
@@ -104,6 +107,7 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
     try {
       await work();
       _changed = true;
+      widget.onChanged?.call();
       await _load(showSpinner: false);
       if (mounted) {
         _comment.clear();
@@ -187,6 +191,7 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
     );
     if (!mounted || saved != true) return;
     _changed = true;
+    widget.onChanged?.call();
     await _load(showSpinner: false);
   }
 

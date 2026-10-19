@@ -250,8 +250,9 @@ class _ApprovalRequestCreateDialogState
         PopupMenuItem<String>(
           value: option.key,
           child: Row(children: [
-            Expanded(child: Text(option.value, style: TextStyle(
-                color: _p.secondaryText, fontSize: 12))),
+            Expanded(child: Text(option.value,
+            maxLines: 1, overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: _p.secondaryText, fontSize: 12))),
             if (option.value == selectedLabel)
               Icon(Icons.check_rounded, color: _p.link, size: 17),
           ]),

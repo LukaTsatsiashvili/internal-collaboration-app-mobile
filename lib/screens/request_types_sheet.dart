@@ -286,6 +286,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                 maxHeight: availableHeight,
               ),
               child: Container(
+        key: const ValueKey('request-types-sheet-panel'),
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: p.panel,
@@ -403,6 +404,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.separated(
+                          key: const ValueKey('request-types-cards-list'),
                           keyboardDismissBehavior:
                               ScrollViewKeyboardDismissBehavior.onDrag,
                           physics: const AlwaysScrollableScrollPhysics(),

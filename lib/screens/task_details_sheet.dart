@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/tasks/data/task_service.dart';
 
 /// Task details owns its async operations and routes. The parent refreshes
@@ -474,24 +475,16 @@ class _TaskDetailsSheetState extends State<TaskDetailsSheet> {
     final p = _p;
     final selected = options.where((item) => item.key == value);
     final name = selected.isNotEmpty ? selected.first.value : options.first.value;
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashFactory: NoSplash.splashFactory,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-      ),
+    return AppDropdownTheme(
       child: LayoutBuilder(
         builder: (context, bounds) => PopupMenuButton<String>(
           enabled: !_updating,
           tooltip: 'Choose ' + name,
           position: PopupMenuPosition.under,
-          offset: const Offset(0, 4),
+          offset: AppDropdownTheme.menuGap,
           color: p.card,
-          constraints: BoxConstraints(
-            minWidth: bounds.maxWidth,
-            maxWidth: bounds.maxWidth,
-            maxHeight: 315,
+          constraints: AppDropdownTheme.menuBounds(
+            bounds.maxWidth, 315,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(17),

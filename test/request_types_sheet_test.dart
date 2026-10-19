@@ -296,9 +296,7 @@ void main() {
     // must be rounded even when it is inset from the Android navigation bar.
     final surfaces = tester.widgetList<Material>(
       find.descendant(
-        of: find.text('Save new version').evaluate().isNotEmpty
-            ? find.byType(ApprovalTypeCreateSheet)
-            : find.byType(RequestTypesSheet),
+        of: find.byType(ApprovalTypeCreateSheet),
         matching: find.byType(Material),
       ),
     );

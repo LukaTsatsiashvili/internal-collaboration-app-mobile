@@ -1,6 +1,6 @@
 /// Mirrors the web New Approval Type configurator and API schema.
 ///
-/// Only creation is implemented here; editing/versioning is a separate flow.
+/// Supports both new types and editing an existing version.
 class ApprovalTypeFieldDraft {
   ApprovalTypeFieldDraft({
     required this.localId,
@@ -34,6 +34,49 @@ class ApprovalTypeStepDraft {
 }
 
 class ApprovalTypeDraft {
+  ApprovalTypeDraft();
+
+  /// Load the exact stored form/steps before editing, preserving field order.
+  ApprovalTypeDraft.fromExisting(Map<dynamic, dynamic> source) {
+    name = (source['name'] ?? '').toString();
+    code = (source['code'] ?? '').toString();
+    description = (source['description'] ?? '').toString();
+    fields.clear();
+    final schema = source['formSchema'];
+    if (schema is Map) {
+      for (final entry in schema.entries) {
+        final value = entry.value;
+        if (value is! Map) continue;
+        fields.add(ApprovalTypeFieldDraft(
+          localId: _id(),
+          keyName: entry.key.toString(),
+          label: (value['label'] ?? '').toString(),
+          type: (value['type'] ?? 'text').toString(),
+          required: value['required'] == true,
+          options: value['options'] is List
+              ? (value['options'] as List).map((o) => o.toString()).toList()
+              : [],
+        ));
+      }
+    }
+    steps.clear();
+    final rawSteps = source['steps'];
+    if (rawSteps is List) {
+      final ordered = rawSteps.whereType<Map>().toList();
+      ordered.sort((a, b) =>
+          ((a['stepNumber'] as num?)?.toInt() ?? 0)
+              .compareTo((b['stepNumber'] as num?)?.toInt() ?? 0));
+      for (final step in ordered) {
+        steps.add(ApprovalTypeStepDraft(
+          localId: _id(),
+          name: (step['name'] ?? '').toString(),
+          approverRule: (step['approverRule'] ?? 'REQUESTER_MANAGER').toString(),
+          approverValue: (step['approverValue'] ?? '').toString(),
+        ));
+      }
+    }
+  }
+
   String name = '';
   String code = '';
   String description = '';
@@ -138,9 +181,12 @@ class ApprovalTypeDraft {
       if (step.name.trim().length < 2 || step.name.trim().length > 150) {
         return 'Step ${i + 1}: name must contain 2–150 characters.';
       }
-      if (!const ['USER', 'REQUESTER_MANAGER', 'DEPARTMENT_MANAGER']
+      if (!const ['USER', 'REQUESTER_MANAGER', 'DEPARTMENT_MANAGER', 'ROLE']
           .contains(step.approverRule)) {
         return 'Step ${i + 1}: invalid approver.';
+      }
+      if (step.approverRule == 'ROLE' && step.approverValue.isEmpty) {
+        return 'Step ${i + 1}: select a role.';
       }
       if (step.approverRule == 'USER') {
         if (step.approverValue.isEmpty ||
@@ -175,7 +221,8 @@ class ApprovalTypeDraft {
               'stepNumber': i + 1,
               'name': steps[i].name.trim(),
               'approverRule': steps[i].approverRule,
-              'approverValue': steps[i].approverRule == 'USER'
+              'approverValue': const ['USER', 'ROLE']
+                      .contains(steps[i].approverRule)
                   ? steps[i].approverValue
                   : null,
             },

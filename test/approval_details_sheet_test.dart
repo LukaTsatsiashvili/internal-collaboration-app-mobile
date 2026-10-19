@@ -187,6 +187,7 @@ void main() {
     await openDetails(tester, service);
     expect(find.text('Confirm decision'), findsNothing);
     expect(find.text('Cancel request'), findsOneWidget);
-    expect(find.text('Add a comment…'), findsOneWidget);
+    expect(find.byKey(const ValueKey('approval-detail-add-comment')),
+      findsOneWidget);
   });
 }

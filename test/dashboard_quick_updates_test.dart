@@ -93,6 +93,44 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('metric cards open Tasks and Approvals without quick-create',
+      (tester) async {
+    final openedTabs = <int>[];
+    final quickActions = <DashboardQuickAction>[];
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: DashboardScreen(
+        onToggleTheme: () {},
+        onChangeLanguage: () {},
+        currentLanguage: 'ka',
+        currentThemeMode: ThemeMode.light,
+        dashboardService: FakeDashboardData(),
+        notificationService: FakeUpdates([]),
+        onNavigateToModule: openedTabs.add,
+        onQuickAction: quickActions.add,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+
+    final taskCard = find.byKey(
+      const ValueKey('dashboard-active-tasks-card'),
+    );
+    final approvalCard = find.byKey(
+      const ValueKey('dashboard-pending-approvals-card'),
+    );
+    expect(taskCard, findsOneWidget);
+    expect(approvalCard, findsOneWidget);
+    expect(tester.widget<InkWell>(taskCard).onTap, isNotNull);
+    expect(tester.widget<InkWell>(approvalCard).onTap, isNotNull);
+
+    await tester.tap(taskCard);
+    await tester.tap(approvalCard);
+    expect(openedTabs, [2, 3]);
+    expect(quickActions, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('dashboard displays only newest four backend updates',
       (tester) async {
     final updates = FakeUpdates([

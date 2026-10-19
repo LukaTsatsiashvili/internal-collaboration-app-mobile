@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 
 import 'task_group_dialog.dart';
 import 'task_create_sheet.dart';
@@ -304,18 +305,11 @@ class _TasksScreenState extends State<TasksScreen> {
     final p = _p;
     // Local theme prevents tap/hover feedback in the popup without changing
     // the persistent blue background of the chosen sorting option.
-    return Theme(
-      data: Theme.of(context).copyWith(
-        splashFactory: NoSplash.splashFactory,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        hoverColor: Colors.transparent,
-        focusColor: Colors.transparent,
-      ),
+    return AppDropdownTheme(
       child: PopupMenuButton<String>(
       tooltip: 'Sort tasks',
       position: PopupMenuPosition.under,
-      offset: const Offset(0, 5),
+      offset: AppDropdownTheme.menuGap,
       // No initialValue: it makes Flutter pre-scroll the selected row into
       // position, cutting off the first Default item on smaller screens.
       onSelected: (value) => setState(() => _selectedSort = value),

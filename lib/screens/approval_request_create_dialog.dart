@@ -10,8 +10,15 @@ import '../features/approvals/data/approval_service.dart';
 
 /// New Request mirrors web RequestForm. Returns true after confirmed creation.
 class ApprovalRequestCreateDialog extends StatefulWidget {
-  const ApprovalRequestCreateDialog({super.key, required this.service});
+  const ApprovalRequestCreateDialog({
+    super.key,
+    required this.service,
+    this.filePicker,
+  });
   final ApprovalService service;
+
+  /// Injectable for tests; production uses the platform's file_selector.
+  final Future<XFile?> Function()? filePicker;
 
   @override
   State<ApprovalRequestCreateDialog> createState() =>
@@ -91,7 +98,9 @@ class _ApprovalRequestCreateDialogState
     if (_saving || _pickingFile) return;
     setState(() => _pickingFile = true);
     try {
-      final file = await openFile();
+      final file = widget.filePicker != null
+          ? await widget.filePicker!()
+          : await openFile();
       if (!mounted) return;
       if (file != null) setState(() { _file = file; _error = null; });
     } catch (error) {

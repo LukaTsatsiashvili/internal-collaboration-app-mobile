@@ -33,6 +33,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
   DashboardQuickAction? _pendingQuickAction;
   int _quickActionLaunchId = 0;
+  int _tabNavigationVersion = 0;
 
   void _launchFromDashboard(DashboardQuickAction action) {
     setState(() {
@@ -142,6 +143,9 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                                 setState(() {
                                   _currentIndex = index;
                                   _pendingQuickAction = null;
+                                  // Selecting a tab always returns to that
+                                  // tab's root, even from a notification link.
+                                  _tabNavigationVersion++;
                                 });
                               },
                               child: Center(
@@ -197,7 +201,23 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     ];
 
     return Scaffold(
-      body: screens[_currentIndex],
+      // All secondary routes (Inbox, task/approval details and chats) are
+      // pushed inside this navigator, never above MainNavigationScreen.
+      // The floating navigation bar therefore stays visible and usable.
+      // Changing tabs replaces only this navigator's stack with the chosen
+      // root. Include language/theme to keep root widgets in sync when the
+      // app's appearance is changed from the Dashboard profile controls.
+      body: Navigator(
+        key: ValueKey<String>(
+          'app-shell-$_currentIndex-$_quickActionLaunchId-'
+          '$_tabNavigationVersion-${widget.currentLanguage}-'
+          '${widget.currentThemeMode}',
+        ),
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (_) => screens[_currentIndex],
+        ),
+      ),
       bottomNavigationBar: _buildFloatingNavigation(context),
     );
   }
@@ -328,8 +348,7 @@ List<Widget> buildGlobalActions(
 
             if (context.mounted) {
               // ვასუფთავებთ მთელ ნავიგაციის ისტორიას და ვბრუნდებით ლოგინზე
-              Navigator.pushAndRemoveUntil(
-                context,
+              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => LoginScreen(
                     onToggleTheme: onToggleTheme,

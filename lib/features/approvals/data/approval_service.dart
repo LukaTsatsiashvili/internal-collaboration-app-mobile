@@ -61,6 +61,9 @@ class ApprovalService {
     try {
       final response = await _apiClient.dio.delete(
         '/approval-groups/${Uri.encodeComponent(id)}',
+        // ApiClient sends application/json; Fastify requires a valid JSON
+        // document when that content type is present (even on DELETE).
+        data: const <String, dynamic>{},
       );
       final body = response.data;
       if (body is! Map || body['success'] != true ||

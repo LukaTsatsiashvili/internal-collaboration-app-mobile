@@ -314,10 +314,15 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   );
 
   Future<void> _openRequestTypesSheet() async {
-    await showDialog<void>(
+    // Restore the original smooth bottom-up transition rather than showDialog.
+    await showModalBottomSheet<void>(
       context: context,
       useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       barrierColor: Colors.black.withValues(alpha: 0.48),
+      elevation: 0,
+      clipBehavior: Clip.none,
       builder: (_) => RequestTypesSheet(service: _approvalService),
     );
   }

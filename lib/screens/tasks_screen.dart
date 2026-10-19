@@ -12,14 +12,17 @@ import 'task_advanced_filters.dart';
 import '../features/tasks/data/task_service.dart';
 
 class TasksScreen extends StatefulWidget {
-  const TasksScreen({super.key});
+  const TasksScreen({super.key, this.service});
+
+  /// Optional service injection keeps group workflows testable.
+  final TaskService? service;
 
   @override
   State<TasksScreen> createState() => _TasksScreenState();
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  final TaskService _taskService = TaskService();
+  late final TaskService _taskService;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   TaskAdvancedFilters _advancedFilters = TaskAdvancedFilters();
@@ -29,6 +32,7 @@ class _TasksScreenState extends State<TasksScreen> {
   bool _isLoading = true;
   bool _isCreatingGroup = false;
   bool _isCreatingTask = false;
+  String? _busyGroupId;
   int _loadRequestId = 0;
   List<dynamic> _tasks = [];
   List<dynamic> _groups = [];
@@ -61,6 +65,7 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   void initState() {
     super.initState();
+    _taskService = widget.service ?? TaskService();
     _loadData();
   }
 
@@ -683,7 +688,8 @@ class _TasksScreenState extends State<TasksScreen> {
         ]),
         trailing: Row(mainAxisSize: MainAxisSize.min, children: [
           TextButton(
-            onPressed: _isCreatingTask ? null : _showNewTaskBottomSheet,
+            onPressed: _isCreatingTask ? null
+                : () => _showNewTaskBottomSheet(initialGroupId: groupId),
             style: TextButton.styleFrom(
               minimumSize: const Size(0, 30),
               padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -693,10 +699,29 @@ class _TasksScreenState extends State<TasksScreen> {
               color: p.link, fontSize: 10, fontWeight: FontWeight.w600,
             )),
           ),
-          const SizedBox(width: 4),
-          Icon(Icons.edit_outlined, color: p.muted, size: 16),
-          const SizedBox(width: 8),
-          Icon(Icons.delete_outline_rounded, color: p.muted, size: 17),
+          if (groupId != null) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              key: ValueKey('edit-task-group-$groupId'),
+              tooltip: 'Rename $name',
+              onPressed: _busyGroupId == null
+                  ? () => _renameTaskGroup(groupId, name) : null,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minHeight: 32, minWidth: 32),
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.edit_outlined, color: p.muted, size: 17),
+            ),
+            IconButton(
+              key: ValueKey('delete-task-group-$groupId'),
+              tooltip: 'Delete $name',
+              onPressed: _busyGroupId == null
+                  ? () => _deleteTaskGroup(groupId, name) : null,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minHeight: 32, minWidth: 32),
+              padding: EdgeInsets.zero,
+              icon: Icon(Icons.delete_outline_rounded, color: p.muted, size: 18),
+            ),
+          ],
         ]),
         children: tasks.isEmpty
             ? [Padding(
@@ -928,7 +953,92 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  Future<void> _showNewTaskBottomSheet() async {
+  Future<void> _renameTaskGroup(String groupId, String oldName) async {
+    if (_busyGroupId != null) return;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => TaskGroupDialog(
+        initialName: oldName, renameTitle: 'Rename task group',
+      ),
+    );
+    if (!mounted || name == null || name == oldName ||
+        _busyGroupId != null) return;
+    setState(() => _busyGroupId = groupId);
+    try {
+      await _taskService.renameTaskGroup(id: groupId, name: name);
+      if (!mounted) return;
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ჯგუფის სახელი განახლებულია')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _busyGroupId = null);
+    }
+  }
+
+  Future<void> _deleteTaskGroup(String groupId, String name) async {
+    if (_busyGroupId != null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: _p.panel,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: _p.cardBorder),
+        ),
+        title: Text('Delete “$name”?', style: TextStyle(color: _p.ink)),
+        content: Text(
+          'Tasks in this group will move to Ungrouped for you. '
+          'No tasks will be deleted, and other users are not affected.',
+          style: TextStyle(color: _p.secondaryText, fontSize: 12),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text('Delete', style: TextStyle(
+              color: Theme.of(dialogContext).colorScheme.error,
+              fontWeight: FontWeight.w700,
+            )),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true || _busyGroupId != null) return;
+    setState(() => _busyGroupId = groupId);
+    try {
+      await _taskService.deleteTaskGroup(groupId);
+      if (!mounted) return;
+      setState(() => _advancedFilters.groupIds.remove(groupId));
+      await _loadData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(
+          'ჯგუფი წაიშალა; დავალებები გადავიდა Ungrouped-ში',
+        )),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _busyGroupId = null);
+    }
+  }
+
+  Future<void> _showNewTaskBottomSheet({String? initialGroupId}) async {
     // The sheet owns its controllers. It only returns an immutable draft.
     final draft = await showModalBottomSheet<TaskCreationDraft>(
       context: context,
@@ -938,7 +1048,11 @@ class _TasksScreenState extends State<TasksScreen> {
       backgroundColor: Colors.transparent,
       elevation: 0,
       clipBehavior: Clip.none,
-      builder: (_) => TaskCreateSheet(service: _taskService, groups: _groups),
+      builder: (_) => TaskCreateSheet(
+        service: _taskService,
+        groups: _groups,
+        initialGroupId: initialGroupId,
+      ),
     );
     if (!mounted || draft == null || _isCreatingTask) return;
     setState(() => _isCreatingTask = true);

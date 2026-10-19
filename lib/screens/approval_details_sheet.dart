@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/theme/app_dropdown_theme.dart';
 import '../features/approvals/data/approval_detail_rules.dart';
 import '../features/approvals/data/approval_service.dart';
 import 'approval_request_create_dialog.dart';
@@ -285,16 +286,17 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
         if (group is Map && group['id'] != null)
           group['id'].toString(): (group['name'] ?? 'Group').toString(),
     };
-    return LayoutBuilder(
+    return AppDropdownTheme(
+      child: LayoutBuilder(
       builder: (context, bounds) => PopupMenuButton<String>(
         key: const ValueKey('approval-detail-group'),
         tooltip: 'Change personal group',
         enabled: !_busy,
         position: PopupMenuPosition.under,
+        offset: AppDropdownTheme.menuGap,
         color: _p.card,
-        constraints: BoxConstraints(
-          minWidth: bounds.maxWidth, maxWidth: bounds.maxWidth,
-          maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+        constraints: AppDropdownTheme.menuBounds(
+          bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.4,
         ),
         onSelected: (value) => _setGroup(value.isEmpty ? null : value),
         itemBuilder: (_) => [
@@ -322,19 +324,21 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
           ]),
         ),
       ),
+      ),
     );
   }
 
-  Widget _decisionDropdown() => LayoutBuilder(
+  Widget _decisionDropdown() => AppDropdownTheme(
+    child: LayoutBuilder(
     builder: (context, bounds) => PopupMenuButton<String>(
       key: const ValueKey('approval-detail-decision'),
       enabled: !_busy,
       tooltip: 'Review decision',
       position: PopupMenuPosition.under,
+      offset: AppDropdownTheme.menuGap,
       color: _p.card,
-      constraints: BoxConstraints(
-        minWidth: bounds.maxWidth, maxWidth: bounds.maxWidth,
-        maxHeight: MediaQuery.sizeOf(context).height * 0.4,
+      constraints: AppDropdownTheme.menuBounds(
+        bounds.maxWidth, MediaQuery.sizeOf(context).height * 0.4,
       ),
       onSelected: (value) => setState(() => _decision = value),
       itemBuilder: (_) => [
@@ -360,6 +364,7 @@ class _ApprovalDetailsSheetState extends State<ApprovalDetailsSheet> {
           Icon(Icons.keyboard_arrow_down_rounded, color: _p.muted, size: 19),
         ]),
       ),
+    ),
     ),
   );
 

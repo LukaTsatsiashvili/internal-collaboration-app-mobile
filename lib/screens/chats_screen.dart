@@ -1732,12 +1732,15 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
         final resolvedTitle =
             conversationData['title'] ?? chatTitle ?? 'კორპორატიული ჩათი';
 
-        // ვხურავთ დიალოგს და ვაბრუნებთ true-ს
-        Navigator.pop(context, true);
+        // Capture the navigator while the dialog context is still mounted.
+        // The modal is popped before entering chat, including when launched
+        // from a Dashboard Quick Action.
+        final navigator = Navigator.of(context);
+        navigator.pop(true);
 
-        // პირდაპირ ვხსნით ახლადშექმნილი ჩატის ეკრანს
-        Navigator.push(
-          context,
+        // Open the newly-created conversation without reusing a popped
+        // dialog's BuildContext.
+        navigator.push(
           MaterialPageRoute(
             builder: (_) => ChatDetailScreen(
               conversationId: conversationId,

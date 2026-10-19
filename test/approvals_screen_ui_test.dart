@@ -11,6 +11,7 @@ class FakeApprovalService extends ApprovalService {
           'id': 'request-1',
           'title': 'Purchase laptop',
           'status': 'PENDING',
+          'approvalTypeId': 'type-1',
           'requesterId': 'user-2',
           'requester': {'displayName': 'Employee A'},
           'approvalType': {'name': 'Purchase request'},
@@ -25,6 +26,7 @@ class FakeApprovalService extends ApprovalService {
           'id': 'request-2',
           'title': 'Vacation request',
           'status': 'APPROVED',
+          'approvalTypeId': 'type-2',
           'requesterId': 'user-1',
           'requester': {'displayName': 'Employee B'},
           'approvalType': {'name': 'Vacation'},
@@ -40,6 +42,12 @@ class FakeApprovalService extends ApprovalService {
   Future<List<dynamic>> getApprovalGroups() async => [
         {'id': 'group-1', 'name': 'My reviews', 'position': 1000},
         {'id': 'group-2', 'name': 'Archive', 'position': 2000},
+      ];
+
+  @override
+  Future<List<dynamic>> getApprovalTypes() async => [
+        {'id': 'type-1', 'name': 'Purchase request'},
+        {'id': 'type-2', 'name': 'Vacation'},
       ];
 
   @override
@@ -91,4 +99,52 @@ void main() {
     expect(find.text('Purchase laptop'), findsOneWidget);
     expect(find.text('Vacation request'), findsNothing);
   });
+  testWidgets('advanced filter applies status selection and can clear it',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: ApprovalsScreen(service: FakeApprovalService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Filter approvals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Filter approvals'), findsOneWidget);
+    expect(find.text('SUBMITTED'), findsOneWidget);
+    expect(find.text('Request type'), findsOneWidget);
+    expect(find.text('Requester'), findsOneWidget);
+    expect(find.text('Personal group'), findsOneWidget);
+
+    await tester.tap(find.text('PENDING'));
+    await tester.tap(find.text('Done  ✓'));
+    await tester.pumpAndSettle();
+    expect(find.text('Purchase laptop'), findsOneWidget);
+    expect(find.text('Vacation request'), findsNothing);
+
+    await tester.tap(find.byTooltip('Filter approvals'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clear all'));
+    await tester.tap(find.text('Done  ✓'));
+    await tester.pumpAndSettle();
+    expect(find.text('Vacation request'), findsOneWidget);
+  });
+
+  testWidgets('sorting includes request type in both directions',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData(extensions: const [AppPalette.light]),
+      home: ApprovalsScreen(service: FakeApprovalService()),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Sort approvals'));
+    await tester.pumpAndSettle();
+    expect(find.text('Default'), findsWidgets);
+    expect(find.text('Request type · A to Z'), findsOneWidget);
+    expect(find.text('Request type · Z to A'), findsOneWidget);
+    await tester.tap(find.text('Request type · A to Z'));
+    await tester.pumpAndSettle();
+    expect(find.text('Type A-Z'), findsOneWidget);
+  });
+
 }

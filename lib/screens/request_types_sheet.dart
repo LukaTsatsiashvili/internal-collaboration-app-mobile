@@ -261,8 +261,12 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
   @override
   Widget build(BuildContext context) {
     final p = _p;
-    return FractionallySizedBox(
-      heightFactor: 0.9,
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: FractionallySizedBox(
+        heightFactor: 0.9,
       alignment: Alignment.bottomCenter,
       child: Container(
         clipBehavior: Clip.antiAlias,
@@ -391,6 +395,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
           ),
           SizedBox(height: MediaQuery.paddingOf(context).bottom),
         ]),
+      ),
       ),
     );
   }

@@ -177,7 +177,7 @@ class _ApprovalRequestCreateDialogState
     position: PopupMenuPosition.under,
     color: _p.card,
     constraints: BoxConstraints(
-      maxWidth: math.max(0, MediaQuery.sizeOf(context).width - 40),
+      maxWidth: math.max(0.0, MediaQuery.sizeOf(context).width - 40),
       maxHeight: MediaQuery.sizeOf(context).height * 0.55,
     ),
     shape: RoundedRectangleBorder(

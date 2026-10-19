@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/approvals/data/approval_service.dart';
+import 'approval_type_create_sheet.dart';
 
-/// Read-only Request Types management sheet.
-/// New Type / Edit / Activate / Deactivate are visual-only in this iteration.
+/// Request Types management sheet. Create is functional; edit/status controls
+/// remain visual-only until their separate forms are implemented.
 class RequestTypesSheet extends StatefulWidget {
   const RequestTypesSheet({super.key, required this.service});
 
@@ -82,6 +83,20 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
           (entry['name'] ?? '').toString().toLowerCase().contains(query) ||
           (entry['code'] ?? '').toString().toLowerCase().contains(query);
     }).toList(growable: false);
+  }
+
+  Future<void> _newType() async {
+    final created = await showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      clipBehavior: Clip.none,
+      builder: (_) => ApprovalTypeCreateSheet(service: widget.service),
+    );
+    if (!mounted || created != true) return;
+    await _load();
   }
 
   Widget _staticButton(String label, {bool primary = false}) {
@@ -267,21 +282,25 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     // Dialog supplies the Material ancestor required by TextField and
     // PopupMenuButton. It also centers the content and automatically keeps
     // it inside the keyboard- and SafeArea-adjusted viewport.
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      alignment: Alignment.center,
-      backgroundColor: p.panel,
-      surfaceTintColor: Colors.transparent,
-      elevation: 8,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(27),
-        side: BorderSide(color: p.cardBorder),
-      ),
-      child: ConstrainedBox(
-        key: const ValueKey('request-types-sheet-panel'),
-        constraints: const BoxConstraints(maxWidth: 450),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        heightFactor: 1,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 450),
+          child: Material(
+            color: p.panel,
+            elevation: 6,
+            clipBehavior: Clip.antiAlias,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(27),
+              side: BorderSide(color: p.cardBorder),
+            ),
+            child: Column(
+              key: const ValueKey('request-types-sheet-panel'),
+              mainAxisSize: MainAxisSize.min,
+              children: [
           const SizedBox(height: 10),
           Container(
             width: 34, height: 4,
@@ -360,7 +379,14 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
                 const SizedBox(height: 10),
                 _statusDropdown(),
                 const SizedBox(height: 13),
-                _staticButton('New type', primary: true),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _newType,
+                    borderRadius: BorderRadius.circular(13),
+                    child: _staticButton('New type', primary: true),
+                  ),
+                ),
               ],
             ),
           ),
@@ -431,7 +457,10 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
             ),
           ),
           const SizedBox(height: 14),
-        ]),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

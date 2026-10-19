@@ -267,6 +267,161 @@ class ApprovalService {
     return id;
   }
 
+  /// Load the live request before every decision; revision protects against
+  /// stale decisions from a concurrent web/mobile session.
+  Future<Map<String, dynamic>> getApprovalRequest(String id) async {
+    try {
+      final response = await _apiClient.dio.get(
+        '/approval-requests/${Uri.encodeComponent(id)}',
+      );
+      return _approvalData(response.data, 'Request detail could not be loaded');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Request detail could not be loaded'));
+    }
+  }
+
+  Future<Map<String, dynamic>> getCurrentApprovalUser() async {
+    try {
+      final response = await _apiClient.dio.get('/auth/me');
+      return _approvalData(response.data, 'Current user could not be loaded');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Current user could not be loaded'));
+    }
+  }
+
+  /// Same user-specific grouping endpoint as the web RequestDetail component.
+  Future<void> setApprovalRequestGroup(String id, String? groupId) async {
+    try {
+      final response = await _apiClient.dio.put(
+        '/approval-requests/${Uri.encodeComponent(id)}/layout',
+        data: <String, dynamic>{'groupId': groupId},
+      );
+      _approvalData(response.data, 'Group change was not saved');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Group change was not saved'));
+    }
+  }
+
+  /// Decisions must include revision. Only the current assigned approver
+  /// may act, and reject/request changes require an explanation.
+  Future<void> decideApproval({
+    required String id,
+    required int revision,
+    required String action,
+    String comment = '',
+  }) async {
+    if (!const ['APPROVE', 'REJECT', 'REQUEST_CHANGES'].contains(action)) {
+      throw ArgumentError('Unknown review decision');
+    }
+    if (action != 'APPROVE' && comment.trim().isEmpty) {
+      throw ArgumentError('Explain your decision');
+    }
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-requests/${Uri.encodeComponent(id)}/actions',
+        data: <String, dynamic>{
+          'revision': revision, 'action': action, 'comment': comment.trim(),
+        },
+      );
+      _approvalData(response.data, 'Decision could not be saved');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Decision could not be saved'));
+    }
+  }
+
+  Future<void> cancelApproval({required String id, required int revision}) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-requests/${Uri.encodeComponent(id)}/cancel',
+        data: <String, dynamic>{'revision': revision},
+      );
+      if (response.data is! Map || response.data['success'] != true) {
+        throw StateError('Cancellation was not confirmed');
+      }
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Cancellation failed'));
+    }
+  }
+
+  Future<void> commentOnApproval({
+    required String id,
+    required String content,
+  }) async {
+    if (content.trim().isEmpty || content.trim().length > 5000) {
+      throw ArgumentError('Comment must contain 1–5000 characters');
+    }
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-requests/${Uri.encodeComponent(id)}/comments',
+        data: <String, dynamic>{'content': content.trim()},
+      );
+      _approvalData(response.data, 'Comment could not be saved');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Comment could not be saved'));
+    }
+  }
+
+  Future<void> markApprovalNotificationsRead(String id) async {
+    await _apiClient.dio.post('/notifications/read-related',
+      data: <String, dynamic>{
+        'entityType': 'APPROVAL_REQUEST', 'entityId': id,
+      },
+    );
+  }
+
+  /// The existing authenticated Dio interceptor adds the bearer token.
+  /// The file endpoint returns binary application/octet-stream.
+  Future<List<int>> downloadApprovalAttachment(String fileId) async {
+    try {
+      final response = await _apiClient.dio.get<List<int>>(
+        '/files/${Uri.encodeComponent(fileId)}/download',
+        options: Options(responseType: ResponseType.bytes,
+          receiveTimeout: const Duration(minutes: 2)),
+      );
+      if (response.data == null) throw StateError('File is empty');
+      return response.data!;
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'File download failed'));
+    }
+  }
+
+  /// Edit existing draft/changes-requested request using optimistic revision.
+  Future<void> reviseApprovalRequest({
+    required String id,
+    required int revision,
+    required String title,
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final response = await _apiClient.dio.patch(
+        '/approval-requests/${Uri.encodeComponent(id)}',
+        data: <String, dynamic>{
+          'title': title.trim(), 'data': data, 'revision': revision,
+        },
+      );
+      if (response.data is! Map || response.data['success'] != true) {
+        throw StateError('Changes were not saved');
+      }
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Request update failed'));
+    }
+  }
+
+  Future<void> submitExistingApproval({
+    required String id,
+    required int revision,
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-requests/${Uri.encodeComponent(id)}/submit',
+        data: <String, dynamic>{'revision': revision},
+      );
+      _approvalData(response.data, 'Request submission failed');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Request submission failed'));
+    }
+  }
+
   // 2. მოთხოვნაზე მოქმედების შესრულება: დამტკიცება/უარყოფა (POST /approval-requests/:id/actions)
   Future<void> performAction({
     required String requestId,

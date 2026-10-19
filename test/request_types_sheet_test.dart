@@ -120,6 +120,11 @@ void main() {
     expect(allPanel.bottom, lessThan(screenHeight));
     expect(list.height, lessThanOrEqualTo(285.1));
 
+    // Cards beyond the initial two remain accessible inside the list.
+    await tester.drag(listFinder, const Offset(0, -280));
+    await tester.pumpAndSettle();
+    expect(find.text('Draft request'), findsOneWidget);
+
     // Selecting one matching status reduces the sheet's overall height.
     await tester.tap(find.byTooltip('Request type status'));
     await tester.pumpAndSettle();

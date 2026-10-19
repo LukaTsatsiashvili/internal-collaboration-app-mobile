@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/approvals/data/approval_service.dart';
+import 'approval_advanced_filters.dart';
+import 'approval_filter_dialog.dart';
 
 class ApprovalsScreen extends StatefulWidget {
   const ApprovalsScreen({super.key, this.focusRequestId, this.service});
@@ -23,7 +25,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   String _search = '';
   String _view = 'All';
   String _sort = 'Default';
-  String _statusFilter = 'All statuses';
+  ApprovalAdvancedFilters _advancedFilters = ApprovalAdvancedFilters();
+  List<dynamic> _approvalTypes = [];
   String? _currentUserId;
   List<dynamic> _groups = [];
   List<String> _groupOrder = [];
@@ -53,10 +56,14 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       final requests = await _approvalService.getApprovalRequests();
       // Groups and current user are read-only aids for the page layout.
       // An unavailable optional endpoint must not hide approvals themselves.
-      List<dynamic> groups = [];
+      List<dynamic> groups = _groups;
+      List<dynamic> types = _approvalTypes;
       String? userId = _currentUserId;
       try {
         groups = await _approvalService.getApprovalGroups();
+      } catch (_) {}
+      try {
+        types = await _approvalService.getApprovalTypes();
       } catch (_) {}
       if (userId == null) {
         try {
@@ -70,6 +77,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       setState(() {
         _requests = requests;
         _groups = groups;
+        _approvalTypes = types;
         _currentUserId = userId;
         // Preserve temporary on-screen drag order when refreshing.
         _groupOrder = [
@@ -323,11 +331,12 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   static const _sortLabels = [
     'Default', 'Created · newest', 'Created · oldest',
     'Title · A to Z', 'Title · Z to A', 'Requester · A to Z',
-    'Requester · Z to A', 'Status',
+    'Requester · Z to A', 'Request type · A to Z',
+    'Request type · Z to A', 'Status',
   ];
-  static const _statuses = [
-    'All statuses', 'DRAFT', 'PENDING', 'APPROVED',
-    'REJECTED', 'CHANGES_REQUESTED', 'CANCELLED',
+  static const _statusOrder = [
+    'DRAFT', 'SUBMITTED', 'PENDING', 'CHANGES_REQUESTED',
+    'APPROVED', 'REJECTED', 'CANCELLED',
   ];
 
   Widget _tabs() => SizedBox(
@@ -362,42 +371,77 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     ),
   );
 
-  Widget _statusMenu() => PopupMenuButton<String>(
-    tooltip: 'Filter approvals by status',
-    position: PopupMenuPosition.under,
-    onSelected: (value) => setState(() => _statusFilter = value),
-    color: _p.card,
-    shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(20),
-      side: BorderSide(color: _p.cardBorder),
-    ),
-    itemBuilder: (context) => _statuses.map((value) =>
-      PopupMenuItem<String>(
-        value: value,
-        child: Row(children: [
-          Expanded(child: Text(value == 'All statuses' ? value :
-            _statusLabel(value), style: TextStyle(
-              color: _statusFilter == value ? _p.link : _p.ink,
-              fontSize: 12, fontWeight: FontWeight.w600,
-            ))),
-          if (_statusFilter == value)
-            Icon(Icons.check_rounded, color: _p.link, size: 17),
-        ]),
+  List<dynamic> _filterTypes() {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final raw in _approvalTypes) {
+      if (raw is! Map || raw['id'] == null) continue;
+      final id = raw['id'].toString();
+      byId[id] = {'id': id, 'name': (raw['name'] ?? '').toString(),
+        'code': (raw['code'] ?? '').toString()};
+    }
+    // Include inactive or historical types still referenced by a request.
+    for (final raw in _requests) {
+      if (raw is! Map) continue;
+      final id = raw['approvalTypeId']?.toString();
+      if (id == null || id.isEmpty || byId.containsKey(id)) continue;
+      byId[id] = {'id': id, 'name': _typeName(raw)};
+    }
+    final values = byId.values.toList();
+    values.sort((a, b) => a['name'].toString().toLowerCase()
+        .compareTo(b['name'].toString().toLowerCase()));
+    return values;
+  }
+
+  List<dynamic> _filterRequesters() {
+    final byId = <String, Map<String, dynamic>>{};
+    for (final raw in _requests) {
+      if (raw is! Map) continue;
+      final id = raw['requesterId']?.toString();
+      if (id == null || id.isEmpty) continue;
+      final requester = raw['requester'];
+      if (requester is! Map) continue;
+      byId[id] = {'id': id,
+        'displayName': (requester['displayName'] ??
+            requester['email'] ?? '').toString(),
+        'email': (requester['email'] ?? '').toString()};
+    }
+    final values = byId.values.toList();
+    values.sort((a, b) => a['displayName'].toString().toLowerCase()
+        .compareTo(b['displayName'].toString().toLowerCase()));
+    return values;
+  }
+
+  Future<void> _openAdvancedFilters() async {
+    final selection = await showDialog<ApprovalAdvancedFilters>(
+      context: context,
+      builder: (_) => ApprovalFilterDialog(
+        initial: _advancedFilters,
+        requestTypes: _filterTypes(),
+        requesters: _filterRequesters(),
+        groups: _groups,
       ),
-    ).toList(),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      child: Stack(clipBehavior: Clip.none, children: [
+    );
+    if (!mounted || selection == null) return;
+    setState(() => _advancedFilters = selection);
+  }
+
+  Widget _advancedFilterButton() {
+    final active = _advancedFilters.activeCount;
+    return IconButton(
+      tooltip: 'Filter approvals',
+      onPressed: _openAdvancedFilters,
+      padding: const EdgeInsets.symmetric(horizontal: 7),
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+      icon: Stack(clipBehavior: Clip.none, children: [
         Icon(Icons.filter_list_rounded, size: 19,
-          color: _statusFilter == 'All statuses'
-              ? _p.secondaryText : _p.link),
-        if (_statusFilter != 'All statuses')
-          const Positioned(right: -3, top: -3, child: CircleAvatar(
-            radius: 3.5, backgroundColor: AppColors.primary,
+            color: active == 0 ? _p.secondaryText : _p.link),
+        if (active > 0)
+          const Positioned(right: -5, top: -5, child: CircleAvatar(
+            radius: 4, backgroundColor: AppColors.primary,
           )),
       ]),
-    ),
-  );
+    );
+  }
 
   String get _sortShort {
     switch (_sort) {
@@ -407,6 +451,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       case 'Title · Z to A': return 'Title Z-A';
       case 'Requester · A to Z': return 'Person A-Z';
       case 'Requester · Z to A': return 'Person Z-A';
+      case 'Request type · A to Z': return 'Type A-Z';
+      case 'Request type · Z to A': return 'Type Z-A';
       case 'Status': return 'Status';
       default: return 'Default';
     }
@@ -497,7 +543,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
             ),
           ),
         )),
-        _statusMenu(),
+        _advancedFilterButton(),
         const SizedBox(width: 9),
         _sortMenu(),
         const SizedBox(width: 11),
@@ -547,10 +593,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         if (!involved) return false;
         break;
     }
-    if (_statusFilter != 'All statuses' &&
-        request['status']?.toString() != _statusFilter) {
-      return false;
-    }
+    if (!_advancedFilters.matches(request)) return false;
     final query = _search.trim().toLowerCase();
     if (query.isEmpty) return true;
     final searchText = [
@@ -602,9 +645,17 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           c = _requester(b).toLowerCase()
               .compareTo(_requester(a).toLowerCase());
           break;
+        case 'Request type · A to Z':
+          c = _typeName(a).toLowerCase()
+              .compareTo(_typeName(b).toLowerCase());
+          break;
+        case 'Request type · Z to A':
+          c = _typeName(b).toLowerCase()
+              .compareTo(_typeName(a).toLowerCase());
+          break;
         case 'Status':
-          c = (a['status'] ?? '').toString()
-              .compareTo((b['status'] ?? '').toString());
+          c = _statusOrder.indexOf((a['status'] ?? '').toString())
+              .compareTo(_statusOrder.indexOf((b['status'] ?? '').toString()));
           break;
         default:
           c = _position(a).compareTo(_position(b));
@@ -627,6 +678,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     }
     final sections = <Map<String, dynamic>>[];
     for (final id in _groupOrder) {
+      if (_advancedFilters.groupIds.isNotEmpty &&
+          !_advancedFilters.groupIds.contains(id)) continue;
       final group = byId[id];
       if (group == null) continue;
       sections.add({
@@ -638,15 +691,18 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       });
     }
     final ownedIds = byId.keys.toSet();
-    sections.add({
-      'id': 'ungrouped',
-      'name': 'Ungrouped',
-      'requests': _sorted(visible.where((req) {
-        final layout = req['personalLayout'];
-        final id = layout is Map ? layout['groupId']?.toString() : null;
-        return id == null || !ownedIds.contains(id);
-      }).toList()),
-    });
+    if (_advancedFilters.groupIds.isEmpty ||
+        _advancedFilters.groupIds.contains(ApprovalAdvancedFilters.ungrouped)) {
+      sections.add({
+        'id': 'ungrouped',
+        'name': 'Ungrouped',
+        'requests': _sorted(visible.where((req) {
+          final layout = req['personalLayout'];
+          final id = layout is Map ? layout['groupId']?.toString() : null;
+          return id == null || !ownedIds.contains(id);
+        }).toList()),
+      });
+    }
     return sections;
   }
 
@@ -654,7 +710,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     final count = _groupOrder.length;
     if (oldIndex < 0 || oldIndex >= count) return; // Ungrouped stays last.
     if (newIndex > oldIndex) newIndex--;
-    newIndex = newIndex.clamp(0, count - 1);
+    newIndex = newIndex.clamp(0, count - 1).toInt();
     if (oldIndex == newIndex) return;
     setState(() {
       final id = _groupOrder.removeAt(oldIndex);
@@ -665,6 +721,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
 
   static String _statusLabel(String status) {
     switch (status) {
+      case 'SUBMITTED': return 'Submitted';
       case 'APPROVED': return 'Approved';
       case 'PENDING': return 'Pending';
       case 'REJECTED': return 'Rejected';

@@ -59,7 +59,7 @@ void main() {
     final service = FakeRequestTypeService();
     await showTypes(tester, service);
     expect(service.loads, 1);
-    expect(find.text('Request types'), findsOneWidget);
+    expect(find.text('Request Types'), findsOneWidget);
     expect(find.text('All Statuses'), findsOneWidget);
     expect(find.text('New type'), findsOneWidget);
     expect(find.text('Active request'), findsOneWidget);
@@ -98,4 +98,35 @@ void main() {
     expect(find.text('No request types found'), findsOneWidget);
     expect(service.loads, 1); // Search and status filtering are local.
   });
+  testWidgets('sheet is inset, adapts height and scrolls after two cards',
+      (tester) async {
+    final service = FakeRequestTypeService();
+    await showTypes(tester, service);
+    final panelFinder = find.byKey(
+      const ValueKey('request-types-sheet-panel'),
+    );
+    final listFinder = find.byKey(
+      const ValueKey('request-types-cards-list'),
+    );
+
+    final screenWidth = tester.view.physicalSize.width /
+        tester.view.devicePixelRatio;
+    final screenHeight = tester.view.physicalSize.height /
+        tester.view.devicePixelRatio;
+    final allPanel = tester.getRect(panelFinder);
+    final list = tester.getRect(listFinder);
+    expect(allPanel.left, greaterThanOrEqualTo(13));
+    expect(allPanel.right, lessThanOrEqualTo(screenWidth - 13));
+    expect(allPanel.bottom, lessThan(screenHeight));
+    expect(list.height, lessThanOrEqualTo(285.1));
+
+    // Selecting one matching status reduces the sheet's overall height.
+    await tester.tap(find.byTooltip('Request type status'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(PopupMenuItem<String>, 'Draft'));
+    await tester.pumpAndSettle();
+    final oneCardPanel = tester.getRect(panelFinder);
+    expect(oneCardPanel.height, lessThan(allPanel.height));
+  });
+
 }

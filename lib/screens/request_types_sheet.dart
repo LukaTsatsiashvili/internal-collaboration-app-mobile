@@ -26,6 +26,7 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
   bool _loading = true;
   String? _error;
   int _loadVersion = 0;
+  String? _busyTypeId;
 
   AppPalette get _p => Theme.of(context).extension<AppPalette>()!;
   bool get _dark => Theme.of(context).brightness == Brightness.dark;
@@ -97,6 +98,44 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
     );
     if (!mounted || created != true) return;
     await _load();
+  }
+
+  Future<void> _editType(Map<String, dynamic> item) async {
+    if (_busyTypeId != null) return;
+    final updated = await showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      clipBehavior: Clip.none,
+      builder: (_) => ApprovalTypeCreateSheet(
+        service: widget.service,
+        existing: item,
+      ),
+    );
+    if (!mounted || updated != true) return;
+    await _load();
+  }
+
+  Future<void> _changeStatus(String id, String currentStatus) async {
+    if (_busyTypeId != null) return;
+    setState(() => _busyTypeId = id);
+    try {
+      await widget.service.changeApprovalTypeStatus(
+        id, currentStatus == 'ACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      );
+      if (!mounted) return;
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.toString().replaceFirst('Exception: ', '')),
+        backgroundColor: Theme.of(context).colorScheme.error,
+      ));
+    } finally {
+      if (mounted) setState(() => _busyTypeId = null);
+    }
   }
 
   Widget _staticButton(String label, {bool primary = false}) {
@@ -265,9 +304,34 @@ class _RequestTypesSheetState extends State<RequestTypesSheet> {
         ),
         const SizedBox(height: 13),
         Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-          _staticButton('Edit'),
+          if (_busyTypeId == item['id']?.toString()) ...[
+            const SizedBox(width: 17, height: 17,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 11),
+          ],
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('edit-type-${item['id']}'),
+              onTap: _busyTypeId != null
+                  ? null
+                  : () => _editType(Map<String, dynamic>.from(item)),
+              borderRadius: BorderRadius.circular(14),
+              child: _staticButton('Edit'),
+            ),
+          ),
           const SizedBox(width: 7),
-          _staticButton(status == 'ACTIVE' ? 'Deactivate' : 'Activate'),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey('toggle-type-${item['id']}'),
+              onTap: _busyTypeId != null
+                  ? null
+                  : () => _changeStatus(item['id'].toString(), status),
+              borderRadius: BorderRadius.circular(14),
+              child: _staticButton(status == 'ACTIVE' ? 'Deactivate' : 'Activate'),
+            ),
+          ),
         ]),
       ]),
     );

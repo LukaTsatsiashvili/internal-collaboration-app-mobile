@@ -119,6 +119,104 @@ class ApprovalService {
     }
   }
 
+  /// PATCH creates a new version; the server preserves snapshots used by
+  /// existing requests and refuses code changes once a type is in use.
+  Future<Map<String, dynamic>> updateApprovalType(
+      String id, Map<String, dynamic> payload) async {
+    try {
+      final response = await _apiClient.dio.patch(
+        '/approval-types/${Uri.encodeComponent(id)}',
+        data: payload,
+      );
+      return _approvalData(response.data, 'Request type update failed');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Request type update failed'));
+    }
+  }
+
+  Future<Map<String, dynamic>> changeApprovalTypeStatus(
+      String id, String status) async {
+    if (status != 'ACTIVE' && status != 'INACTIVE') {
+      throw ArgumentError('Invalid approval type status');
+    }
+    try {
+      final response = await _apiClient.dio.patch(
+        '/approval-types/${Uri.encodeComponent(id)}/status',
+        data: {'status': status},
+      );
+      return _approvalData(response.data, 'Status update failed');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Status update failed'));
+    }
+  }
+
+  /// Mirrors web RequestForm: {approvalTypeId,title,data,submit,attachmentIds}.
+  Future<Map<String, dynamic>> createApprovalRequest({
+    required String approvalTypeId,
+    required String title,
+    required Map<String, dynamic> data,
+    required bool submit,
+    List<String> attachmentIds = const [],
+  }) async {
+    try {
+      final response = await _apiClient.dio.post(
+        '/approval-requests',
+        data: <String, dynamic>{
+          'approvalTypeId': approvalTypeId,
+          'title': title.trim(),
+          'data': data,
+          'submit': submit,
+          'attachmentIds': attachmentIds,
+        },
+      );
+      return _approvalData(response.data, 'Approval request could not be saved');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'Approval request could not be saved'));
+    }
+  }
+
+  /// Upload before creating the request, as the web client does. Fastify
+  /// expects a multipart POST even though ApiClient defaults to JSON.
+  Future<String> uploadApprovalAttachment(
+      List<int> bytes, String fileName) async {
+    if (bytes.isEmpty) throw ArgumentError('Cannot attach an empty file');
+    try {
+      final response = await _apiClient.dio.post(
+        '/files',
+        data: FormData.fromMap({
+          'file': MultipartFile.fromBytes(bytes, filename: fileName),
+        }),
+        options: Options(
+          contentType: Headers.multipartFormDataContentType,
+          sendTimeout: const Duration(minutes: 2),
+          receiveTimeout: const Duration(minutes: 2),
+        ),
+      );
+      final body = response.data;
+      if (body is Map && body['success'] == true &&
+          body['data'] is Map && body['data']['id'] != null) {
+        return body['data']['id'].toString();
+      }
+      throw StateError('File upload was not confirmed');
+    } on DioException catch (error) {
+      throw Exception(_approvalError(error, 'File upload failed'));
+    }
+  }
+
+  Map<String, dynamic> _approvalData(dynamic body, String fallback) {
+    if (body is Map && body['success'] == true && body['data'] is Map) {
+      return Map<String, dynamic>.from(body['data'] as Map);
+    }
+    throw StateError(fallback);
+  }
+
+  String _approvalError(DioException error, String fallback) {
+    final body = error.response?.data;
+    final nested = body is Map ? body['error'] : null;
+    final message = nested is Map ? nested['message'] : null;
+    return message?.toString() ?? fallback;
+  }
+
   /// Used only to display current-user quick filters, as on the web page.
   Future<String> getCurrentUserId() async {
     final response = await _apiClient.dio.get('/auth/me');

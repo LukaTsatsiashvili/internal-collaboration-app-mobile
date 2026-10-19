@@ -32,6 +32,13 @@ abstract final class AppTheme {
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
+      // Global no-press treatment. InkWell/ListTile/ExpansionTile keep their
+      // actions and explicit selected states, without transient tap ripples
+      // or a pressed background behind group headers and buttons.
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      hoverColor: Colors.transparent,
       extensions: <ThemeExtension<dynamic>>[palette],
       fontFamily: 'Roboto',
       scaffoldBackgroundColor: palette.page,
@@ -95,10 +102,31 @@ abstract final class AppTheme {
           backgroundColor: AppColors.primary,
           foregroundColor: Colors.white,
           shape: const StadiumBorder(),
+        ).copyWith(
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.primary,
+        ).copyWith(
+          overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+        ),
+      ),
+      iconButtonTheme: const IconButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: WidgetStatePropertyAll(Colors.transparent),
+        ),
+      ),
+      outlinedButtonTheme: const OutlinedButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: WidgetStatePropertyAll(Colors.transparent),
+        ),
+      ),
+      elevatedButtonTheme: const ElevatedButtonThemeData(
+        style: ButtonStyle(
+          overlayColor: WidgetStatePropertyAll(Colors.transparent),
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,

@@ -90,6 +90,7 @@ class _DriveSectionsService extends DriveService {
   Future<PersonalDriveListing> getSharedListing({
     required String spaceId,
     String? parentId,
+    String? search,
   }) async {
     calls.add('shared:$spaceId:$parentId');
     return const PersonalDriveListing(items: [], usedBytes: 0);

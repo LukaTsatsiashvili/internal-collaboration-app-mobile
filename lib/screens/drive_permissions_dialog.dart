@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme/app_colors.dart';
+import '../core/widgets/app_modal_elements.dart';
 import '../core/theme/app_dropdown_theme.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/drive/data/drive_service.dart';
@@ -230,35 +231,21 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
               ),
             ),
             const SizedBox(width: 5),
-            AppDropdownTheme(
-              child: Container(
-                width: 130,
-                height: 39,
-                padding: const EdgeInsets.symmetric(horizontal: 9),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(11),
-                  color: p.panel,
-                  border: Border.all(color: p.cardBorder),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: current,
-                    isExpanded: true,
-                    dropdownColor: p.card,
-                    borderRadius: BorderRadius.circular(12),
-                    icon: Icon(Icons.keyboard_arrow_down_rounded,
-                        size: 16, color: p.muted),
-                    style: TextStyle(color: p.ink, fontSize: 11),
-                    onChanged: _saving ? null : (value) => _assign(r.key, value),
-                    items: const [
-                      DropdownMenuItem(value: 'NONE', child: Text('No Access')),
-                      DropdownMenuItem(value: 'VIEWER', child: Text('Viewer')),
-                      DropdownMenuItem(value: 'EDITOR', child: Text('Editor')),
-                      DropdownMenuItem(value: 'EDITOR_DELETE',
-                          child: Text('Edit/Delete')),
-                    ],
+            SizedBox(
+              width: MediaQuery.sizeOf(context).width <= 380 ? 119 : 138,
+              child: AppSelectDropdown<String>(
+                label: 'Permission for ${r.label}',
+                value: current,
+                onChanged: _saving ? null : (value) => _assign(r.key, value),
+                items: const [
+                  DropdownMenuItem(value: 'NONE', child: Text('No Access')),
+                  DropdownMenuItem(value: 'VIEWER', child: Text('Viewer')),
+                  DropdownMenuItem(value: 'EDITOR', child: Text('Editor')),
+                  DropdownMenuItem(
+                    value: 'EDITOR_DELETE',
+                    child: Text('Edit/Delete'),
                   ),
-                ),
+                ],
               ),
             ),
           ],
@@ -287,20 +274,11 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [
-                Expanded(child: Text(
-                  'Permissions · ${widget.item['name']}',
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: p.ink, fontWeight: FontWeight.w800,
-                    fontSize: 15),
-                )),
-                IconButton(
-                  tooltip: 'Close',
-                  onPressed: _saving ? null : () => Navigator.pop(context),
-                  icon: Icon(Icons.close_rounded, color: p.muted, size: 19),
-                ),
-              ]),
-              const SizedBox(height: 8),
+              AppModalHeader(
+                title: 'Permissions · ${widget.item['name']}',
+                onClose: _saving ? null : () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(height: 15),
               Flexible(
                 child: SingleChildScrollView(
                   child: Column(

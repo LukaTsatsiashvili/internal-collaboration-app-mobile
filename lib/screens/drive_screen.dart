@@ -1304,7 +1304,8 @@ class _DriveScreenState extends State<DriveScreen> {
         ? (file['sizeBytes'] as num).toInt()
         : null;
     final tint = folder
-        ? const Color(0xFF8A6DFA)
+        ? (_section == 'shared'
+            ? const Color(0xFFF1A412) : const Color(0xFF8A6DFA))
         : sheet
             ? const Color(0xFF15AF8D)
             : AppColors.primary;
@@ -1388,7 +1389,8 @@ class _DriveScreenState extends State<DriveScreen> {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
-                  _typeLabel(item),
+                  _section == 'shared' && sheet
+                      ? 'XLSX' : _typeLabel(item),
                   style: TextStyle(
                     color: _p.secondaryText,
                     fontSize: 9.5,

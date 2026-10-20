@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/drive/data/drive_service.dart';
+import '../features/drive/data/excel_to_univer.dart';
+import 'task_group_dialog.dart';
 
 /// Visual-first Personal Drive, styled with the same semantic palette and
 /// search field as Messages. All listed data comes from the real Drive API.
@@ -24,6 +27,8 @@ class _DriveScreenState extends State<DriveScreen> {
   String? _error;
   bool _loading = true;
   bool _newestFirst = true;
+  bool _importingExcel = false;
+  bool _creatingFolder = false;
   int _usedBytes = 0;
   int _loadVersion = 0;
 
@@ -149,44 +154,94 @@ class _DriveScreenState extends State<DriveScreen> {
     );
   }
 
+  void _feedback(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        backgroundColor: error ? Theme.of(context).colorScheme.error : null,
+      ));
+  }
+
+  String _errorMessage(Object error) => error
+      .toString()
+      .replaceFirst(RegExp(r'^(Exception|FormatException|Bad state):\s*'), '');
+
+  Future<void> _newFolder() async {
+    if (_creatingFolder || _importingExcel) return;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => TaskGroupDialog(
+        createTitle: 'New Folder',
+        fieldLabel: 'Folder name',
+        fieldHint: 'Enter folder name...',
+        createButtonLabel: 'Create Folder',
+        maxNameLength: 200,
+        validateName: (text) {
+          if (text == '.' || text == '..' ||
+              RegExp(r'[\x00-\x1f/\\]').hasMatch(text)) {
+            return 'Use a folder name without slashes or control characters';
+          }
+          return null;
+        },
+      ),
+    );
+    if (!mounted || name == null) return;
+    setState(() => _creatingFolder = true);
+    try {
+      await _driveService.createFolder(name);
+      if (!mounted) return;
+      await _loadPersonalDrive();
+      _feedback('Folder created successfully');
+    } catch (error) {
+      _feedback(_errorMessage(error), error: true);
+    } finally {
+      if (mounted) setState(() => _creatingFolder = false);
+    }
+  }
+
+  Future<void> _importExcel() async {
+    if (_importingExcel || _creatingFolder) return;
+    try {
+      final file = await openFile(
+        acceptedTypeGroups: [
+          const XTypeGroup(
+            label: 'Excel spreadsheets',
+            extensions: ['xlsx', 'xlsm', 'xls'],
+          ),
+        ],
+      );
+      if (file == null || !mounted) return;
+      // Some Android file managers ignore extension filters; validate too.
+      if (!ExcelToUniver.supportsFilename(file.name)) {
+        _feedback('Choose an Excel file (.xlsx, .xlsm or .xls)', error: true);
+        return;
+      }
+
+      setState(() => _importingExcel = true);
+      final bytes = await file.readAsBytes();
+      await _driveService.importExcel(bytes, filename: file.name);
+      if (!mounted) return;
+      await _loadPersonalDrive();
+      _feedback('Excel spreadsheet imported successfully');
+    } catch (error) {
+      _feedback(_errorMessage(error), error: true);
+    } finally {
+      if (mounted) setState(() => _importingExcel = false);
+    }
+  }
+
   Widget _header() {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            'Drive',
-            style: TextStyle(
-              color: _p.ink,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              height: 1.15,
-              letterSpacing: -0.8,
-            ),
-          ),
-        ),
-        Container(
-          width: 37,
-          height: 37,
-          decoration: BoxDecoration(
-            color: _p.card,
-            shape: BoxShape.circle,
-          ),
-          child: Icon(Icons.notifications_none_rounded,
-              size: 19, color: _p.secondaryText),
-        ),
-        const SizedBox(width: 7),
-        Container(
-          width: 37,
-          height: 37,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(
-              colors: [AppColors.gradientStart, AppColors.gradientEnd],
-            ),
-          ),
-          child: const Icon(Icons.hub_rounded, color: Colors.white, size: 19),
-        ),
-      ],
+    return Text(
+      'Drive',
+      style: TextStyle(
+        color: _p.ink,
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        height: 1.15,
+        letterSpacing: -0.8,
+      ),
     );
   }
 
@@ -234,7 +289,14 @@ class _DriveScreenState extends State<DriveScreen> {
     );
   }
 
-  Widget _quickButton(String label, IconData icon, Color accent, double width) {
+  Widget _quickButton(
+    String label,
+    IconData icon,
+    Color accent,
+    double width, {
+    required VoidCallback? onTap,
+    bool loading = false,
+  }) {
     return SizedBox(
       width: width,
       height: 43,
@@ -243,7 +305,7 @@ class _DriveScreenState extends State<DriveScreen> {
         borderRadius: BorderRadius.circular(13),
         child: InkWell(
           borderRadius: BorderRadius.circular(13),
-          onTap: () => _later(label),
+          onTap: onTap,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 11),
             decoration: BoxDecoration(
@@ -252,11 +314,21 @@ class _DriveScreenState extends State<DriveScreen> {
             ),
             child: Row(
               children: [
-                Icon(icon, size: 17, color: accent),
+                if (loading)
+                  SizedBox(
+                    width: 17,
+                    height: 17,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: accent,
+                    ),
+                  )
+                else
+                  Icon(icon, size: 17, color: accent),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
-                    label,
+                    loading ? 'Importing...' : label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -275,19 +347,36 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _quickActions() {
+    final busy = _importingExcel || _creatingFolder;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          _quickButton('Import Excel', Icons.file_download_outlined,
-              AppColors.primary, 122),
+          _quickButton(
+            'Import Excel',
+            Icons.file_download_outlined,
+            AppColors.primary,
+            122,
+            onTap: busy ? null : _importExcel,
+            loading: _importingExcel,
+          ),
           const SizedBox(width: 8),
-          _quickButton('New Spreadsheet', Icons.table_chart_outlined,
-              const Color(0xFF14AD86), 151),
+          _quickButton(
+            'New Spreadsheet',
+            Icons.table_chart_outlined,
+            const Color(0xFF14AD86),
+            151,
+            onTap: busy ? null : () => _later('New Spreadsheet'),
+          ),
           const SizedBox(width: 8),
-          _quickButton('New Folder', Icons.create_new_folder_outlined,
-              const Color(0xFF7E68F5), 123),
+          _quickButton(
+            'New Folder',
+            Icons.create_new_folder_outlined,
+            const Color(0xFF7E68F5),
+            123,
+            onTap: busy ? null : _newFolder,
+          ),
         ],
       ),
     );

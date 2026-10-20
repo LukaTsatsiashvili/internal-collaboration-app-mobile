@@ -1,6 +1,6 @@
 # Flutter Drive → Univer Spreadsheet
 
-This documents the first working integration on **dev-luka**. The Flutter
+This documents the initial implementation on **dev-luka** (device testing is still required). The Flutter
 Drive screen creates and opens the *same* virtual Univer spreadsheet records
 as the web application. No alternate spreadsheet storage format is introduced.
 
@@ -22,8 +22,9 @@ Flutter environment) before `flutter run`.
 
 ## Current single-server developer test setup
 
-The developer currently runs **web/backend `dev-luka` instead of `prod`**
-from the existing server checkout at `https://collaboration.gtexshop.ge`.
+For this test, the developer will temporarily run **web/backend `dev-luka`
+instead of `prod`** from the existing server checkout at
+`https://collaboration.gtexshop.ge`.
 No new staging host, Cloudflare Tunnel or separate database is required.
 
 **Both** the web frontend build and backend service must run the `dev-luka`

@@ -1,8 +1,8 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:excel_community/excel_community.dart';
+import 'package:gtex_collab_app/features/drive/data/univer_excel_export.dart';
 import 'package:gtex_collab_app/core/theme/app_theme.dart';
 import 'package:gtex_collab_app/features/drive/data/drive_service.dart';
 import 'package:gtex_collab_app/screens/drive_screen.dart';
@@ -136,6 +136,47 @@ void main() {
     final sent = payloads.last as Map;
     expect((sent['grants'] as List).single['access'], 'EDITOR_DELETE');
     expect((sent['grants'] as List).single['scope'], 'DESCENDANTS');
+  });
+
+
+  test('Univer download exports a valid multi-sheet Excel workbook', () {
+    final snapshot = {
+      'sheetOrder': ['sheet-1','sheet-2'],
+      'sheets': {
+        'sheet-1': {
+          'name': 'Financials',
+          'cellData': {
+            '0': {
+              '0': {'v': 'Revenue'},
+              '1': {'v': 12.5, 's': {'n': {'pattern':'#,##0.00'}}},
+            },
+            '1': {
+              '1': {'f': '=SUM(B1:B1)'},
+            },
+          },
+          'mergeData': [
+            {'startRow':2,'startColumn':0,'endRow':2,'endColumn':1},
+          ],
+          'rowData': {'0': {'h': 30}},
+          'columnData': {'0': {'w': 120}},
+        },
+        'sheet-2': {
+          'name': 'Notes',
+          'cellData': {'0': {'0': {'v': 'Next year'}}},
+          'mergeData': <dynamic>[],
+        },
+      },
+    };
+    final bytes = UniverExcelExport.export(snapshot);
+    expect(bytes.sublist(0, 2), [80, 75]); // ZIP-based XLSX signature
+    final reopened = Excel.decodeBytes(bytes.toList());
+    expect(reopened.tables.keys, containsAll(['Financials','Notes']));
+    expect(reopened['Financials']
+        .cell(CellIndex.indexByString('A1')).value, TextCellValue('Revenue'));
+    expect(reopened['Financials']
+        .cell(CellIndex.indexByString('B1')).value, DoubleCellValue(12.5));
+    expect(reopened['Notes']
+        .cell(CellIndex.indexByString('A1')).value, TextCellValue('Next year'));
   });
 
   testWidgets('Personal Permissions reads users, departments and grants',

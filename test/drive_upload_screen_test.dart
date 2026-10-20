@@ -48,6 +48,7 @@ class _UploadService extends DriveService {
   Future<Map<String, dynamic>> uploadDriveFile(
     XFile file, {
     String? parentId,
+    String? spaceId,
     void Function(int sent, int total)? onProgress,
   }) async {
     uploads.add(file.name);

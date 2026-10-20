@@ -25,6 +25,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   Map<String, String> _assignments = {};
   bool _includeDescendants = false;
   bool _loading = true;
+  bool _loaded = false;
   bool _saving = false;
   String? _error;
 
@@ -90,6 +91,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
         }
       }
       setState(() {
+        _loaded = true;
         _recipients = recipients;
         _assignments = assignments;
         _includeDescendants =
@@ -113,6 +115,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
 
   void _assign(String key, String? access) {
     setState(() {
+      _error = null;
       if (access == null || access == 'NONE') {
         _assignments.remove(key);
       } else {
@@ -123,6 +126,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
 
   void _bulk(String? access) {
     setState(() {
+      _error = null;
       for (final r in _visible) {
         if (access == null) _assignments.remove(r.key);
         else _assignments[r.key] = access;
@@ -131,7 +135,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   }
 
   Future<void> _save() async {
-    if (_saving || _loading || _error != null) return;
+    if (_saving || _loading || !_loaded) return;
     setState(() => _saving = true);
     try {
       final grants = <Map<String, dynamic>>[];
@@ -442,7 +446,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
                       borderRadius: BorderRadius.circular(15),
                     ),
                     child: ElevatedButton(
-                      onPressed: _saving || _loading || _error != null
+                      onPressed: _saving || _loading || !_loaded
                           ? null : _save,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,

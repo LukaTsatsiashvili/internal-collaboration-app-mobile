@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../core/network/api_client.dart';
+
 /// The actual workbook, formula engine, autosave and conflict handling are
 /// shared with the web app. This screen contains only native navigation and
 /// the origin-restricted Flutter <-> Univer bridge.
@@ -18,19 +20,27 @@ class SpreadsheetScreen extends StatefulWidget {
 }
 
 class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
-  // Must match the origin serving the WebView's spreadsheet editor.
-  // Use --dart-define=COLLAB_ORIGIN=https://collaboration-dev.gtexshop.ge
-  // for isolated staging; production remains the default.
-  static const _origin = String.fromEnvironment(
-    'COLLAB_ORIGIN',
-    defaultValue: 'https://collaboration.gtexshop.ge',
-  );
+  /// The editor and REST API must use the same origin. This defaults to
+  /// collaboration.gtexshop.ge; optional API URL overrides automatically
+  /// update the editor too, preventing cross-environment mismatches.
+  static Uri editorUri(String id) {
+    final api = Uri.parse(ApiClient.baseUrl);
+    if (api.scheme != 'https' || api.host.isEmpty) {
+      throw StateError('Spreadsheet editor requires an HTTPS API origin.');
+    }
+    return api.replace(
+      pathSegments: ['mobile', 'sheets', id],
+      query: null,
+      fragment: null,
+    );
+  }
   static const _storage = FlutterSecureStorage();
 
   late final WebViewController _webView;
   bool _pageLoading = true;
   String? _error;
   bool _authSent = false;
+  bool _requestingClose = false;
 
   @override
   void initState() {
@@ -44,18 +54,25 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
       )
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
-          // A bearer token is injected only into the page hosted by our own
-          // HTTPS domain; prevent top-level navigation to untrusted sites.
+          // Only the exact first-party workbook page may receive the
+          // in-memory token. Never allow a cross-origin redirect.
           if (!request.isMainFrame) return NavigationDecision.navigate;
           final uri = Uri.tryParse(request.url);
-          final allowedOrigin = Uri.tryParse(_origin);
-          if (uri?.scheme == 'https' &&
-              uri?.host == allowedOrigin?.host &&
-              uri?.port == allowedOrigin?.port &&
-              uri!.path.startsWith('/mobile/sheets/')) {
+          final allowed = editorUri(widget.id);
+          if (uri?.origin == allowed.origin && uri?.path == allowed.path &&
+              uri?.query.isEmpty == true && uri?.fragment.isEmpty == true) {
             return NavigationDecision.navigate;
           }
           return NavigationDecision.prevent;
+        },
+        onPageStarted: (_) {
+          _authSent = false;
+          if (mounted) {
+            setState(() {
+              _pageLoading = true;
+              _error = null;
+            });
+          }
         },
         onPageFinished: (_) {
           if (mounted) setState(() => _pageLoading = false);
@@ -69,9 +86,7 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           }
         },
       ))
-      ..loadRequest(
-        Uri.parse('$_origin/mobile/sheets/${Uri.encodeComponent(widget.id)}'),
-      );
+      ..loadRequest(editorUri(widget.id));
   }
 
   Future<void> _onBridgeMessage(JavaScriptMessage message) async {
@@ -105,9 +120,74 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
     }
   }
 
+  /// Android system back and predictive-back gestures must take the same
+  /// save/conflict path as the editor's own Back button. Never silently pop
+  /// a live workbook before the JavaScript editor has persisted its changes.
+  Future<void> _requestSafeClose() async {
+    if (_requestingClose) return;
+    _requestingClose = true;
+    try {
+      if (_error == null && _authSent) {
+        final clicked = await _webView.runJavaScriptReturningResult("""
+          (() => {
+            const back = document.querySelector(
+              'button[title="Back to Flutter Drive"]'
+            );
+            if (!back) return false;
+            back.click();
+            return true;
+          })()
+        """);
+        if (!mounted) return;
+        if (clicked == true || clicked.toString() == 'true') {
+          // JS will post {type:"close"} ONLY after the editor has saved.
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      final leave = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Close spreadsheet?'),
+          content: const Text(
+            'The editor cannot confirm that all changes were saved. '
+            'Closing now may discard unsaved changes.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep editing'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Close anyway'),
+            ),
+          ],
+        ),
+      );
+      if (mounted && leave == true) Navigator.of(context).pop();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot request a safe close. Try again.'),
+          ),
+        );
+      }
+    } finally {
+      _requestingClose = false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _requestSafeClose();
+      },
+      child: Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Stack(
@@ -129,7 +209,7 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
                         Text(_error!, textAlign: TextAlign.center),
                         const SizedBox(height: 14),
                         FilledButton(
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: _requestSafeClose,
                           child: const Text('Back to Drive'),
                         ),
                       ],
@@ -140,6 +220,7 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

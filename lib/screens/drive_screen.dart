@@ -995,6 +995,189 @@ class _DriveScreenState extends State<DriveScreen> {
     );
   }
 
+  Widget _sharedControls() {
+    if (_loadingSpaces) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 15),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    final space = _selectedSpace;
+    if (space == null) {
+      return _messagePanel(Icons.groups_outlined,
+          _error ?? 'No shared spaces available', retry: _error != null);
+    }
+    final global = _spaces.where((s) => s['type'] == 'GLOBAL').toList();
+    final groups = _spaces.where((s) => s['type'] == 'GROUP').toList();
+    final isGlobal = space['type'] == 'GLOBAL';
+    final role = (space['access'] ?? 'VIEWER').toString();
+    final selectedName = (space['name'] ?? 'Shared').toString();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(13),
+          decoration: BoxDecoration(
+            color: _p.card,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _p.cardBorder),
+            boxShadow: [
+              BoxShadow(color: _p.cardShadow, blurRadius: 11,
+                  offset: const Offset(0, 4)),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                height: 43, width: 43,
+                decoration: BoxDecoration(
+                    color: _p.unreadBackground,
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(
+                  isGlobal ? Icons.language_rounded : Icons.groups_rounded,
+                  color: _p.link, size: 21,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(selectedName, maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _p.ink, fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        )),
+                    const SizedBox(height: 4),
+                    Text(isGlobal
+                        ? 'Company-wide shared space'
+                        : 'Group workspace',
+                        style: TextStyle(
+                          color: _p.muted, fontSize: 10.5,
+                        )),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 9, vertical: 7),
+                decoration: BoxDecoration(color: _p.panel,
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(role[0] + role.substring(1).toLowerCase(),
+                    style: TextStyle(
+                      color: _p.secondaryText,
+                      fontSize: 10.5, fontWeight: FontWeight.w700,
+                    )),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Text('GROUPS', style: TextStyle(
+                color: _p.muted, fontSize: 10,
+                fontWeight: FontWeight.w800, letterSpacing: 0.65)),
+            const Spacer(),
+            if (_canCreateGroups)
+              TextButton.icon(
+                key: const ValueKey('shared-add-group'),
+                onPressed: _creatingFolder ? null : _newSharedGroup,
+                icon: Icon(Icons.add_rounded, size: 15, color: _p.link),
+                label: Text('Add', style: TextStyle(
+                    color: _p.link, fontSize: 11,
+                    fontWeight: FontWeight.w700)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(),
+          child: Row(
+            children: [
+              for (final option in [...global, ...groups]) ...[
+                _spaceChip(option),
+                const SizedBox(width: 7),
+              ],
+            ],
+          ),
+        ),
+        // Requested layout: a separate Members button *below* group chips.
+        if (_canManageShared) ...[
+          const SizedBox(height: 13),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              key: const ValueKey('shared-members'),
+              onPressed: _members,
+              icon: Icon(Icons.manage_accounts_outlined,
+                  size: 17, color: _p.link),
+              label: Text('Members', style: TextStyle(
+                color: _p.ink, fontSize: 12,
+                fontWeight: FontWeight.w700,
+              )),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: _p.card,
+                side: BorderSide(color: _p.cardBorder),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 14, vertical: 11),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(13)),
+              ),
+            ),
+          ),
+        ],
+        if (_canWriteShared) ...[
+          const SizedBox(height: 13),
+          _uploadButton(),
+          const SizedBox(height: 9),
+          _quickActions(),
+        ],
+        const SizedBox(height: 15),
+      ],
+    );
+  }
+
+  Widget _spaceChip(Map<String, dynamic> space) {
+    final id = space['id'].toString();
+    final selected = id == _selectedSpaceId;
+    final global = space['type'] == 'GLOBAL';
+    return Material(
+      color: selected ? AppColors.primary : _p.card,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        key: ValueKey('shared-space-$id'),
+        onTap: () => _selectSpace(id),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 11, vertical: 9),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? AppColors.primary : _p.cardBorder,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(global ? Icons.language_rounded : Icons.groups_rounded,
+                  size: 15, color: selected ? Colors.white : _p.muted),
+              const SizedBox(width: 6),
+              Text((space['name'] ?? '').toString(),
+                  style: TextStyle(
+                    color: selected ? Colors.white : _p.secondaryText,
+                    fontSize: 11, fontWeight: FontWeight.w700,
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _fileHeading() {
     return Row(
       children: [
@@ -1463,7 +1646,7 @@ class _DriveScreenState extends State<DriveScreen> {
             style: TextStyle(color: _p.secondaryText, fontSize: 12),
           ),
           if (retry)
-            TextButton(onPressed: _loadPersonalDrive, child: const Text('Retry')),
+            TextButton(onPressed: _refreshDrive, child: const Text('Retry')),
         ],
       ),
     );
@@ -1475,12 +1658,13 @@ class _DriveScreenState extends State<DriveScreen> {
     final isPersonal = _section == 'personal';
     final isTrash = _section == 'trash';
     final isSharedWithMe = _section == 'shared-with-me';
+    final isShared = _section == 'shared';
 
     return Scaffold(
       backgroundColor: _p.page,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: _loadPersonalDrive,
+          onRefresh: _refreshDrive,
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(13, 12, 13, 24),
@@ -1502,6 +1686,7 @@ class _DriveScreenState extends State<DriveScreen> {
                 _trashInfo(),
                 const SizedBox(height: 12),
               ],
+              if (isShared) _sharedControls(),
               if (_activeParent != null && !isTrash) _folderPath(),
               _fileHeading(),
               const SizedBox(height: 7),
@@ -1521,7 +1706,9 @@ class _DriveScreenState extends State<DriveScreen> {
                           ? 'Your trash is empty'
                           : isSharedWithMe
                               ? 'No files have been shared with you yet'
-                              : 'No files or folders in Personal yet',
+                              : isShared
+                                  ? 'No files or folders in this shared space'
+                                  : 'No files or folders in Personal yet',
                 )
               else if (isTrash)
                 ...visible.map(_trashCard)
@@ -1535,7 +1722,9 @@ class _DriveScreenState extends State<DriveScreen> {
                         ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in Trash'
                         : isSharedWithMe
                             ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} shared with me'
-                            : '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
+                            : isShared
+                                ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in ${_selectedSpace?['name'] ?? 'Shared'}'
+                                : '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _p.muted,

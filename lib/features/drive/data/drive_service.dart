@@ -274,6 +274,28 @@ class DriveService {
     }
   }
 
+  /// Create the same virtual Univer workbook used by the web editor.
+  /// The server validates folder/space permissions and initializes version 1.
+  Future<Map<String, dynamic>> createSpreadsheet(
+    String name, {String? parentId, String? spaceId}
+  ) async {
+    _checkName(name);
+    try {
+      final response = await _dio.post('/drive/sheets', data: {
+        'name': name.trim(),
+        'parentId': parentId,
+        if (spaceId != null) 'spaceId': spaceId,
+      });
+      final body = response.data;
+      if (body is Map && body['success'] == true && body['data'] is Map) {
+        return Map<String, dynamic>.from(body['data'] as Map);
+      }
+      throw StateError('The server did not confirm spreadsheet creation');
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Spreadsheet creation failed'));
+    }
+  }
+
   /// Imports the workbook into a live Univer spreadsheet, not a raw Drive
   /// attachment: the web app uses POST /drive/sheets then PUT the snapshot.
   /// A failed save cleans up the newly created (empty) Drive item best-effort.

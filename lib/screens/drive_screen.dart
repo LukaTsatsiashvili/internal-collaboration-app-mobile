@@ -1058,23 +1058,27 @@ class _DriveScreenState extends State<DriveScreen> {
           const SizedBox(height: 12),
           Divider(color: _p.cardBorder, thickness: 1, height: 1),
           const SizedBox(height: 3),
-          Row(
-            children: [
-              Icon(Icons.schedule_outlined, color: _p.muted, size: 13),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  _dateLabel(item),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _p.muted,
-                    fontWeight: FontWeight.w500,
+          // Fill the entire card width. An Expanded date area anchors the
+          // trailing actions to the far right, even when Shared With Me
+          // shows only one Download button.
+          SizedBox(
+            width: double.infinity,
+            child: Row(
+              children: [
+                Icon(Icons.schedule_outlined, color: _p.muted, size: 13),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    _dateLabel(item),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: _p.muted,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(),
               if (!folder)
                 _cardAction(
                   Icons.download_outlined,
@@ -1094,7 +1098,8 @@ class _DriveScreenState extends State<DriveScreen> {
                     canDelete && !busy ? () => _delete(item) : null,
                     destructive: true),
               ],
-            ],
+              ],
+            ),
           ),
           if (bytes != null && bytes > 0)
             Align(

@@ -119,6 +119,11 @@ void main() {
     expect(find.text('Team folder'), findsOneWidget);
     expect(find.text('Upload files'), findsNothing);
     expect(find.byTooltip('Download'), findsOneWidget);
+    // Download is the sole Shared With Me action and must stay at the
+    // trailing (right) edge of its card, not near the middle of the row.
+    final screenRight = tester.getRect(find.byType(Scaffold)).right;
+    final downloadRight = tester.getRect(find.byTooltip('Download')).right;
+    expect(screenRight - downloadRight, lessThan(48));
     expect(find.byTooltip('Rename'), findsNothing);
     expect(find.byTooltip('Permissions'), findsNothing);
     expect(find.byTooltip('Move'), findsNothing);

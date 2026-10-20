@@ -12,11 +12,13 @@ class PersonalDriveListing {
     required this.items,
     required this.usedBytes,
     this.breadcrumbs = const [],
+    this.folderAccess,
   });
 
   final List<Map<String, dynamic>> items;
   final int usedBytes;
   final List<Map<String, dynamic>> breadcrumbs;
+  final String? folderAccess;
 }
 
 class DriveService {
@@ -157,11 +159,13 @@ class DriveService {
   Future<PersonalDriveListing> getSharedListing({
     required String spaceId,
     String? parentId,
+    String? search,
   }) async {
     try {
       final response = await _dio.get('/drive', queryParameters: {
         'spaceId': spaceId,
         if (parentId != null) 'parentId': parentId,
+        if (search != null && search.trim().isNotEmpty) 'q': search.trim(),
       });
       final body = response.data;
       if (body is! Map || body['success'] != true || body['data'] is! List) {
@@ -177,6 +181,8 @@ class DriveService {
             ? (meta['breadcrumbs'] as List).whereType<Map>()
                 .map((m) => Map<String, dynamic>.from(m)).toList()
             : const [],
+        folderAccess: meta is Map && meta['folder'] is Map
+            ? (meta['folder']['access'] ?? '').toString() : null,
       );
     } on DioException catch (e) {
       throw Exception(_serverError(e, 'Could not load shared folder'));

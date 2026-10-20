@@ -1162,12 +1162,6 @@ class _DriveScreenState extends State<DriveScreen> {
             ),
           ),
         ],
-        if (_canWriteShared) ...[
-          const SizedBox(height: 13),
-          _uploadButton(),
-          const SizedBox(height: 9),
-          _quickActions(),
-        ],
         const SizedBox(height: 15),
       ],
     );
@@ -1706,7 +1700,10 @@ class _DriveScreenState extends State<DriveScreen> {
             children: [
               _header(),
               const SizedBox(height: 13),
-              if (isPersonal) ...[
+              // Keep upload actions in the same top section for Personal
+              // and writable Shared spaces, before Search and tabs.
+              // The currently selected space/folder still decides access.
+              if (isPersonal || (isShared && _canWriteShared)) ...[
                 _uploadButton(),
                 const SizedBox(height: 10),
                 _quickActions(),

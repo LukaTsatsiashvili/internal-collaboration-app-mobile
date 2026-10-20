@@ -6,7 +6,12 @@ class ApiClient {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   // შეცვალეთ თქვენი ბექენდის რეალური URL-ით (მაგ: ადგილობრივი სერვერი ან დომენი)
-  static const String baseUrl = 'https://collaboration.gtexshop.ge/api/v1'; 
+  // Override on a staging build with:
+  // --dart-define=COLLAB_API_BASE_URL=https://collaboration-dev.gtexshop.ge/api/v1
+  static const String baseUrl = String.fromEnvironment(
+    'COLLAB_API_BASE_URL',
+    defaultValue: 'https://collaboration.gtexshop.ge/api/v1',
+  ); 
 
   ApiClient() {
     // Dio sets application/json for Map bodies and multipart for FormData.

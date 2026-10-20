@@ -48,6 +48,7 @@ class _SharedFake extends DriveService {
             'mimeType': 'application/pdf', 'sizeBytes': 20},
         }],
         usedBytes: 20,
+        folderAccess: 'VIEWER',
         breadcrumbs: [{'id': parentId, 'name': 'Reports'}],
       );
     }
@@ -180,6 +181,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(fake.calls.last, 'listing:global-id:folder-id');
     expect(find.text('Q4.xlsx'), findsOneWidget);
+    // Folder-level custom Viewer access overrides Global's Manager role
+    // for upload/create actions in the current folder.
+    expect(find.text('Upload files'), findsNothing);
   });
 
   testWidgets('Add shared group selects newly created group',

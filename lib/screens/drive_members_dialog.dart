@@ -97,7 +97,7 @@ class _DriveMembersDialogState extends State<DriveMembersDialog> {
   }
 
   Future<void> _save() async {
-    if (_saving || _loading || _error != null) return;
+    if (_saving || _loading || _people.isEmpty) return;
     setState(() { _saving = true; _error = null; });
     try {
       final members = _roles.entries.where((e) => e.value != 'NONE')

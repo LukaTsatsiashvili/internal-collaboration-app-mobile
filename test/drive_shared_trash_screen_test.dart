@@ -128,6 +128,63 @@ Future<void> _pumpDrive(
 }
 
 void main() {
+  testWidgets('Header remains pinned and searchable across all Drive tabs',
+      (tester) async {
+    final service = _DriveSectionsService();
+    await _pumpDrive(tester, service);
+
+    const headerKey = ValueKey('drive-persistent-header');
+    const listKey = ValueKey('drive-tab-content');
+    const tabSharedMe = ValueKey('drive-tab-shared-with-me');
+    const tabTrash = ValueKey('drive-tab-trash');
+    const tabPersonal = ValueKey('drive-tab-personal');
+
+    final header = find.byKey(headerKey);
+    final content = find.byKey(listKey);
+    final upload = find.text('Upload files');
+    final search = find.byType(TextField).first;
+    final initialTop = tester.getTopLeft(header);
+    final uploadRect = tester.getRect(upload);
+    final searchRect = tester.getRect(search);
+    final controller = tester.widget<TextField>(search).controller;
+
+    expect(header, findsOneWidget);
+    expect(content, findsOneWidget);
+    expect(upload, findsOneWidget);
+
+    InkWell action() {
+      final ancestor = find.ancestor(
+        of: find.text('Upload files'),
+        matching: find.byType(InkWell),
+      );
+      return tester.widget<InkWell>(ancestor.first);
+    }
+
+    expect(action().onTap, isNotNull);
+
+    for (final tab in [tabSharedMe, tabTrash]) {
+      await tester.tap(find.byKey(tab));
+      await tester.pumpAndSettle();
+      expect(find.byKey(headerKey), findsOneWidget);
+      expect(find.byKey(listKey), findsOneWidget);
+      expect(find.text('Upload files'), findsOneWidget);
+      expect(tester.getTopLeft(find.byKey(headerKey)), initialTop);
+      expect(tester.getRect(find.text('Upload files')), uploadRect);
+      expect(tester.getRect(find.byType(TextField).first), searchRect);
+      expect(tester.widget<TextField>(find.byType(TextField).first).controller,
+          same(controller));
+      expect(action().onTap, isNull,
+          reason: 'Read-only and Trash tabs cannot upload');
+    }
+
+    await tester.tap(find.byKey(tabPersonal));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.byKey(headerKey)), initialTop);
+    expect(tester.getRect(find.text('Upload files')), uploadRect);
+    expect(action().onTap, isNotNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Shared With Me reads server view and exposes Download only',
       (tester) async {
     final service = _DriveSectionsService();

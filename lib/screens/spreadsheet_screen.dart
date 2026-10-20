@@ -188,39 +188,39 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
         if (!didPop) _requestSafeClose();
       },
       child: Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            WebViewWidget(controller: _webView),
-            if (_pageLoading)
-              const Center(child: CircularProgressIndicator()),
-            if (_error != null)
-              ColoredBox(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.error_outline_rounded, size: 34),
-                        const SizedBox(height: 14),
-                        Text(_error!, textAlign: TextAlign.center),
-                        const SizedBox(height: 14),
-                        FilledButton(
-                          onPressed: _requestSafeClose,
-                          child: const Text('Back to Drive'),
-                        ),
-                      ],
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              WebViewWidget(controller: _webView),
+              if (_pageLoading)
+                const Center(child: CircularProgressIndicator()),
+              if (_error != null)
+                ColoredBox(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline_rounded, size: 34),
+                          const SizedBox(height: 14),
+                          Text(_error!, textAlign: TextAlign.center),
+                          const SizedBox(height: 14),
+                          FilledButton(
+                            onPressed: _requestSafeClose,
+                            child: const Text('Back to Drive'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }

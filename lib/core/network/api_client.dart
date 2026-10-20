@@ -25,13 +25,7 @@ class ApiClient {
           // Fastify rejects an empty request labeled application/json.
           // DELETE /drive/:id has no body, just like the Web request.
           // Keep JSON headers for requests that actually send JSON.
-          if (options.method.toUpperCase() == 'DELETE' &&
-              options.data == null) {
-            options.headers.removeWhere(
-              (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
-            );
-            options.contentType = null;
-          }
+          omitContentTypeForBodylessDelete(options);
         // მახსოვრობიდან/სექიური საწყობიდან ტოკენის წამოღება
           String? token = await _secureStorage.read(key: 'access_token');
           if (token != null) {
@@ -52,6 +46,18 @@ class ApiClient {
         },
       ),
     );
+  }
+
+  /// Delete endpoints have no JSON request body. This is also reapplied
+  /// during token-refresh retries by the request interceptor.
+  static void omitContentTypeForBodylessDelete(RequestOptions options) {
+    if (options.method.toUpperCase() != 'DELETE' || options.data != null) {
+      return;
+    }
+    options.headers.removeWhere(
+      (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
+    );
+    options.contentType = null;
   }
 
   // ტოკენის განახლების მექანიზმი HttpOnly cookie-ს გამოყენებით

@@ -17,11 +17,18 @@ import 'task_group_dialog.dart';
 /// Visual-first Personal Drive, styled with the same semantic palette and
 /// search field as Messages. All listed data comes from the real Drive API.
 class DriveScreen extends StatefulWidget {
-  const DriveScreen({super.key, this.service, this.downloadSaver});
+  const DriveScreen({
+    super.key,
+    this.service,
+    this.downloadSaver,
+    this.filePicker,
+  });
 
   final DriveService? service;
   /// Optional injection for UI tests; production saves using Android MediaStore.
   final Future<DriveDownloadResult> Function(Uint8List, String)? downloadSaver;
+  /// Test seam for native multi-file picker.
+  final Future<List<XFile>> Function()? filePicker;
 
   @override
   State<DriveScreen> createState() => _DriveScreenState();
@@ -38,6 +45,11 @@ class _DriveScreenState extends State<DriveScreen> {
   bool _newestFirst = true;
   bool _importingExcel = false;
   bool _creatingFolder = false;
+  bool _uploadingFiles = false;
+  int _uploadNumber = 0;
+  int _uploadCount = 0;
+  double _uploadProgress = 0;
+  String _uploadName = '';
   int _usedBytes = 0;
   int _loadVersion = 0;
   String? _activeParent;
@@ -184,7 +196,7 @@ class _DriveScreenState extends State<DriveScreen> {
       .replaceFirst(RegExp(r'^(Exception|FormatException|Bad state):\s*'), '');
 
   Future<void> _newFolder() async {
-    if (_creatingFolder || _importingExcel) return;
+    if (_creatingFolder || _importingExcel || _uploadingFiles) return;
     final name = await showDialog<String>(
       context: context,
       builder: (_) => TaskGroupDialog(
@@ -216,8 +228,90 @@ class _DriveScreenState extends State<DriveScreen> {
     }
   }
 
+  Future<void> _uploadFiles() async {
+    if (_uploadingFiles || _importingExcel || _creatingFolder) return;
+    try {
+      final selected = await (widget.filePicker ?? openFiles)();
+      if (!mounted || selected.isEmpty) return;
+
+      // Capture the folder before picking multiple files: all selected files
+      // must be linked into the same destination.
+      final parentId = _activeParent;
+      setState(() {
+        _uploadingFiles = true;
+        _uploadNumber = 1;
+        _uploadCount = selected.length;
+        _uploadProgress = 0;
+        _uploadName = selected.first.name;
+      });
+
+      var completed = 0;
+      String? problem;
+      for (var index = 0; index < selected.length; index++) {
+        final file = selected[index];
+        if (mounted) {
+          setState(() {
+            _uploadNumber = index + 1;
+            _uploadName = file.name;
+            _uploadProgress = 0;
+          });
+        }
+        try {
+          await _driveService.uploadDriveFile(
+            file,
+            parentId: parentId,
+            onProgress: (sent, total) {
+              if (!mounted || total <= 0) return;
+              final progress = (sent / total).clamp(0.0, 1.0);
+              if ((progress * 100).floor() !=
+                  (_uploadProgress * 100).floor()) {
+                setState(() => _uploadProgress = progress);
+              }
+            },
+          );
+          completed++;
+        } catch (error) {
+          problem = _errorMessage(error);
+          break; // Web also stops at the first failed selected file.
+        }
+      }
+
+      if (!mounted) return;
+      // Refresh after partial success too, so linked files never disappear.
+      await _loadPersonalDrive();
+      if (!mounted) return;
+      if (problem != null) {
+        _feedback(
+          completed > 0
+              ? '$completed of ${selected.length} files uploaded. '
+                  'Could not upload $_uploadName: $problem'
+              : 'Could not upload $_uploadName: $problem',
+          error: true,
+        );
+      } else {
+        _feedback(
+          completed == 1
+              ? 'File uploaded successfully'
+              : '$completed files uploaded successfully',
+        );
+      }
+    } catch (error) {
+      _feedback(_errorMessage(error), error: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _uploadingFiles = false;
+          _uploadNumber = 0;
+          _uploadCount = 0;
+          _uploadProgress = 0;
+          _uploadName = '';
+        });
+      }
+    }
+  }
+
   Future<void> _importExcel() async {
-    if (_importingExcel || _creatingFolder) return;
+    if (_importingExcel || _creatingFolder || _uploadingFiles) return;
     try {
       final file = await openFile(
         acceptedTypeGroups: [
@@ -440,46 +534,99 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _uploadButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppColors.gradientStart, AppColors.gradientEnd],
-          ),
-          borderRadius: BorderRadius.circular(15),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.16),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => _later('Upload files'),
-            borderRadius: BorderRadius.circular(15),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.file_upload_outlined, color: Colors.white, size: 19),
-                SizedBox(width: 9),
-                Text(
-                  'Upload files',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
+    final busy = _uploadingFiles || _importingExcel || _creatingFolder;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.gradientStart, AppColors.gradientEnd],
+              ),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: busy ? null : _uploadFiles,
+                borderRadius: BorderRadius.circular(15),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (_uploadingFiles)
+                      const SizedBox(
+                        width: 19,
+                        height: 19,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    else
+                      const Icon(Icons.file_upload_outlined,
+                          color: Colors.white, size: 19),
+                    const SizedBox(width: 9),
+                    Text(
+                      _uploadingFiles
+                          ? 'Uploading $_uploadNumber / $_uploadCount'
+                          : 'Upload files',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+        if (_uploadingFiles) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _uploadName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: _p.secondaryText, fontSize: 11),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${(_uploadProgress * 100).round()}%',
+                style: TextStyle(
+                  color: _p.link,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _uploadProgress,
+              minHeight: 4,
+              backgroundColor: _p.cardBorder,
+              color: _p.link,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -541,7 +688,7 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _quickActions() {
-    final busy = _importingExcel || _creatingFolder;
+    final busy = _importingExcel || _creatingFolder || _uploadingFiles;
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),

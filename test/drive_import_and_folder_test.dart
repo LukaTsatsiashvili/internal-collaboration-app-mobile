@@ -32,7 +32,7 @@ Dio stubDio(List<String> requests, {
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) {
       requests.add(options.method + ' ' + options.path);
-      payloads?.add(options.data);
+      payloads?.add(options.method == 'GET' ? options.queryParameters : options.data);
       final path = options.path;
       if (path == '/drive/sheets' && options.method == 'POST') {
         handler.resolve(Response(

@@ -140,7 +140,7 @@ void main() {
     expect(service.calls, contains('shared-with-me:null'));
     expect(find.text('Shared presentation.pdf'), findsOneWidget);
     expect(find.text('Team folder'), findsOneWidget);
-    expect(find.text('Upload files'), findsNothing);
+    expect(find.text('Upload files'), findsOneWidget);
     expect(find.byTooltip('Download'), findsOneWidget);
     // Download is the sole Shared With Me action and must stay at the
     // trailing (right) edge of its card, not near the middle of the row.
@@ -232,7 +232,7 @@ void main() {
     expect(find.byKey(const ValueKey('shared-space-global-id')),
         findsOneWidget);
     expect(find.byKey(const ValueKey('shared-members')), findsNothing);
-    expect(find.text('Upload files'), findsNothing);
+    expect(find.text('Upload files'), findsOneWidget);
     expect(find.text('No files or folders in this shared space'),
         findsOneWidget);
   });

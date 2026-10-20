@@ -5,9 +5,9 @@ class ApiClient {
   late final Dio dio;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
-  // შეცვალეთ თქვენი ბექენდის რეალური URL-ით (მაგ: ადგილობრივი სერვერი ან დომენი)
-  // Override on a staging build with:
-  // --dart-define=COLLAB_API_BASE_URL=https://collaboration-dev.gtexshop.ge/api/v1
+  // Flutter API and the Univer WebView use this same HTTPS server.
+  // The default works when the server runs the web/API dev-luka branch on
+  // collaboration.gtexshop.ge. Override only for a different test server.
   static const String baseUrl = String.fromEnvironment(
     'COLLAB_API_BASE_URL',
     defaultValue: 'https://collaboration.gtexshop.ge/api/v1',

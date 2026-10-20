@@ -182,10 +182,12 @@ void main() {
     expect(find.byKey(const ValueKey('shared-add-group')), findsNothing);
     expect(find.text('Upload files'), findsOneWidget);
     // Viewer keeps the same header but cannot trigger uploads.
-    expect(find.byType(Opacity).where((finder) {
-      final widget = tester.widget<Opacity>(finder);
-      return widget.opacity == 0.42;
-    }), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Opacity && widget.opacity == 0.42,
+      ),
+      findsOneWidget,
+    );
     expect(find.byTooltip('Download'), findsOneWidget);
     expect(find.byTooltip('Rename'), findsOneWidget);
     final rename = tester.widget<IconButton>(find.byTooltip('Rename').first);

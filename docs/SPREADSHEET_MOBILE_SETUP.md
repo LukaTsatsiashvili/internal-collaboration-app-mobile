@@ -20,24 +20,54 @@ The mobile app requires the new `webview_flutter` dependency. Run
 `flutter pub get` (and commit the regenerated `pubspec.lock` in your
 Flutter environment) before `flutter run`.
 
-## Isolated staging deployment
+## Current single-server developer test setup
 
-A separate deployment is recommended instead of switching the production
-checkout to `dev-luka`. The web app needs the new `/mobile/sheets/:id`
-route and backend `/api/v1/auth/mobile-webview-session` endpoint.
+The developer currently runs **web/backend `dev-luka` instead of `prod`**
+from the existing server checkout at `https://collaboration.gtexshop.ge`.
+No new staging host, Cloudflare Tunnel or separate database is required.
 
-In an isolated staging build, use matching origins:
+**Both** the web frontend build and backend service must run the `dev-luka`
+code: the web editor requires the `/mobile/sheets/:id` route and the backend
+requires `POST /api/v1/auth/mobile-webview-session`.
+
+On the server, ensure local changes are clean or backed up before switching:
 
 ```bash
-flutter run \
-  --dart-define=COLLAB_ORIGIN=https://collaboration-dev.gtexshop.ge \
-  --dart-define=COLLAB_API_BASE_URL=https://collaboration-dev.gtexshop.ge/api/v1
+cd ~/apps/internal-collaboration-app
+git status
+git fetch origin
+git switch dev-luka
+git pull --ff-only origin dev-luka
+npm --prefix apps/web run build
+sudo systemctl restart collaboration-api
+sudo systemctl status collaboration-api --no-pager
 ```
 
-Both values default to the existing production host if they are omitted.
-For Docker Compose staging use a separate project name, database/volumes and
-web port (e.g. `docker compose -p collaboration-dev ...`, `WEB_PORT=8081`).
-Never point a staging migration/seed command at the real production database.
+Verify Nginx actually serves the freshly built `apps/web/dist`. The above
+commands match the currently described systemd deployment, not the optional
+Docker Compose production template. Do not perform `git merge` into `prod`
+just to run this test.
+
+On the Flutter development laptop:
+
+```bash
+git switch dev-luka
+git pull --ff-only origin dev-luka
+flutter pub get
+flutter test test/drive_import_and_folder_test.dart
+flutter test test/spreadsheet_editor_url_test.dart
+flutter run
+```
+
+The Flutter API and WebView editor use the **same HTTPS origin automatically**,
+derived from `ApiClient.baseUrl`, which defaults to
+`https://collaboration.gtexshop.ge/api/v1`. An optional
+`COLLAB_API_BASE_URL` override is supported for future isolated environments,
+but is not needed for this single-server setup. Do not set `COLLAB_ORIGIN`.
+
+To revert the deployed web/backend **without rewriting either GitHub branch**,
+switch the server checkout back to `prod`, rebuild web, and restart its
+backend. As always, make a database backup before experimental operations.
 
 ## Implementation
 
@@ -88,7 +118,8 @@ main-frame navigation away from this HTTPS editor route.
    editors may save.
 7. Open the same sheet in web and mobile, edit different cells, save both,
    and verify merge; then edit the same cell and verify conflict UI.
-8. Test access expiry, network loss, navigation back and keyboard behavior.
+8. Test access expiry, network loss, Android system Back/navigation gestures,
+   save conflicts and keyboard behavior.
 
 The desktop web spreadsheet route `/drive/sheets/:id` remains unchanged
 except for the permission alignment for `EDITOR_DELETE`.

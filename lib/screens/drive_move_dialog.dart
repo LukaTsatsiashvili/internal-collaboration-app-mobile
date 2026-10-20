@@ -11,10 +11,14 @@ class DriveMoveDialog extends StatefulWidget {
     super.key,
     required this.item,
     required this.service,
+    this.spaceId,
+    this.spaceName,
   });
 
   final Map<String, dynamic> item;
   final DriveService service;
+  final String? spaceId;
+  final String? spaceName;
 
   @override
   State<DriveMoveDialog> createState() => _DriveMoveDialogState();
@@ -51,7 +55,10 @@ class _DriveMoveDialogState extends State<DriveMoveDialog> {
       _error = null;
     });
     try {
-      final data = await widget.service.getPersonalListing(parentId: parent);
+      final data = widget.spaceId != null
+          ? await widget.service.getSharedListing(
+              spaceId: widget.spaceId!, parentId: parent)
+          : await widget.service.getPersonalListing(parentId: parent);
       if (!mounted || version != _version) return;
       setState(() {
         _crumbs = data.breadcrumbs;
@@ -119,7 +126,7 @@ class _DriveMoveDialogState extends State<DriveMoveDialog> {
                 children: [
                   TextButton(
                     onPressed: _loading || _saving ? null : () => _browse(null),
-                    child: const Text('Personal'),
+                    child: Text(widget.spaceName ?? 'Personal'),
                   ),
                   for (final crumb in _crumbs) ...[
                     Icon(Icons.chevron_right_rounded, color: p.muted, size: 17),

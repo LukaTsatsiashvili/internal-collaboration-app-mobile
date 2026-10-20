@@ -1710,14 +1710,18 @@ class _DriveScreenState extends State<DriveScreen> {
     final isTrash = _section == 'trash';
     final isSharedWithMe = _section == 'shared-with-me';
     final isShared = _section == 'shared';
+    // Personal and Shared have a persistent toolbar. Read-only views show
+    // just the tabs so their content can use the freed vertical space.
+    final showFileTools = _section == 'personal' || isShared;
 
     return Scaffold(
       backgroundColor: _p.page,
       body: SafeArea(
         child: Column(
           children: [
-            // Persistent header: changing tabs only changes action
-            // availability, never its position, size or widget identity.
+            // Keep the tab navigation in a stable location within each
+            // layout. Hide the complete editing/search toolbar in read-only
+            // views instead of leaving a large disabled blank area.
             Padding(
               key: const ValueKey('drive-persistent-header'),
               padding: const EdgeInsets.fromLTRB(13, 12, 13, 0),
@@ -1726,12 +1730,14 @@ class _DriveScreenState extends State<DriveScreen> {
                 children: [
                   _header(),
                   const SizedBox(height: 13),
-                  _uploadButton(),
-                  const SizedBox(height: 10),
-                  _quickActions(),
-                  const SizedBox(height: 15),
-                  _searchField(),
-                  const SizedBox(height: 13),
+                  if (showFileTools) ...[
+                    _uploadButton(),
+                    const SizedBox(height: 10),
+                    _quickActions(),
+                    const SizedBox(height: 15),
+                    _searchField(),
+                    const SizedBox(height: 13),
+                  ],
                   _tabs(),
                   const SizedBox(height: 12),
                 ],

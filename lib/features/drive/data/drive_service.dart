@@ -69,6 +69,70 @@ class DriveService {
     }
   }
 
+  /// Read Shared With Me and Trash using the same API as the Web client.
+  /// Shared With Me supports nested folders; Trash is a flat listing.
+  Future<PersonalDriveListing> getDriveView({
+    required String view,
+    String? parentId,
+  }) async {
+    if (view != 'shared-with-me' && view != 'trash') {
+      throw ArgumentError.value(view, 'view', 'Unsupported Drive view');
+    }
+    if (view == 'trash' && parentId != null) {
+      throw ArgumentError.value(
+        parentId, 'parentId', 'Trash does not support folder navigation',
+      );
+    }
+    try {
+      final response = await _dio.get<dynamic>(
+        '/drive',
+        queryParameters: {
+          'view': view,
+          if (parentId != null) 'parentId': parentId,
+        },
+      );
+      final body = response.data;
+      if (body is! Map ||
+          body['success'] != true ||
+          body['data'] is! List) {
+        throw StateError('Drive returned an unexpected response');
+      }
+      final meta = body['meta'];
+      return PersonalDriveListing(
+        items: (body['data'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false),
+        usedBytes: meta is Map && meta['usedBytes'] is num
+            ? (meta['usedBytes'] as num).toInt()
+            : 0,
+        breadcrumbs: meta is Map && meta['breadcrumbs'] is List
+            ? (meta['breadcrumbs'] as List)
+                .whereType<Map>()
+                .map((crumb) => Map<String, dynamic>.from(crumb))
+                .toList()
+            : const [],
+      );
+    } on DioException catch (error) {
+      throw Exception(_serverError(error, 'Could not load Drive items'));
+    }
+  }
+
+  /// Restore the deleted DriveItem in its original location, enforcing all
+  /// the ownership and parent-restore checks already implemented by Web API.
+  Future<void> restoreItem(String itemId) async {
+    try {
+      final response = await _dio.post<dynamic>(
+        '/drive/${Uri.encodeComponent(itemId)}/restore',
+      );
+      _requireSuccess(response, 'Could not restore the item');
+    } on DioException catch (error) {
+      final message = _serverError(error, 'Could not restore the item');
+      final status = error.response?.statusCode;
+      throw Exception(status == null ? message : '$message (HTTP $status)');
+    }
+  }
+
   /// Backwards-compatible list accessor used by older Drive UI callers.
   Future<List<dynamic>> getDriveItems({String? folderId}) async {
     return (await getPersonalListing(parentId: folderId)).items;

@@ -81,7 +81,7 @@ Future<void> _openDialog(
     home: Scaffold(
       body: Builder(
         builder: (context) => TextButton(
-          onPressed: () => showDialog<void>(
+          onPressed: () => showDialog<bool>(
             context: context,
             builder: (_) => build(service),
           ),

@@ -17,13 +17,15 @@ class PersonalDriveListing {
 }
 
 class DriveService {
-  final ApiClient _apiClient = ApiClient();
+  DriveService({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  final Dio _dio;
 
   /// Fetch the signed-in user's Personal space only. The backend expects
   /// parentId (not folderId) and returns kind, file, owner and timestamps.
   Future<PersonalDriveListing> getPersonalListing({String? parentId}) async {
     try {
-      final response = await _apiClient.dio.get(
+      final response = await _dio.get(
         '/drive',
         queryParameters: {
           'view': 'personal',
@@ -76,7 +78,7 @@ class DriveService {
     }
 
     try {
-      final response = await _apiClient.dio.post(
+      final response = await _dio.post(
         '/drive',
         data: {'name': trimmed, 'parentId': null},
       );
@@ -103,7 +105,7 @@ class DriveService {
 
     String? createdId;
     try {
-      final created = await _apiClient.dio.post(
+      final created = await _dio.post(
         '/drive/sheets',
         data: {'name': name, 'parentId': null},
       );
@@ -121,7 +123,7 @@ class DriveService {
       }
       createdId = id;
 
-      final saved = await _apiClient.dio.put(
+      final saved = await _dio.put(
         '/drive/sheets/$id',
         data: {'snapshot': snapshot, 'version': 1},
       );
@@ -135,7 +137,7 @@ class DriveService {
         try {
           // Only remove the incomplete item from the Personal listing.
           // The server implements deletion through Drive Trash.
-          await _apiClient.dio.delete('/drive/$createdId');
+          await _dio.delete('/drive/$createdId');
         } catch (_) {}
       }
       if (error is DioException) {
@@ -162,7 +164,7 @@ class DriveService {
         'file': await MultipartFile.fromFile(filePath, filename: fileName),
       });
 
-      await _apiClient.dio.post('/files', data: formData);
+      await _dio.post('/files', data: formData);
     } on DioException catch (e) {
       final data = e.response?.data;
       final error = data is Map ? data['error'] : null;

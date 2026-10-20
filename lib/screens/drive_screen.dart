@@ -39,6 +39,7 @@ class DriveScreen extends StatefulWidget {
 class _DriveScreenState extends State<DriveScreen> {
   late final DriveService _driveService;
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _contentScrollController = ScrollController();
 
   List<Map<String, dynamic>> _items = [];
   String _query = '';
@@ -77,7 +78,9 @@ class _DriveScreenState extends State<DriveScreen> {
     return null;
   }
 
-  bool get _canWriteShared => _selectedSpace != null && !_loading &&
+  // The last known access remains valid while files are refreshed;
+  // a list-spinner must never cause the header to flash disabled.
+  bool get _canWriteShared => _selectedSpace != null &&
       const {'OWNER', 'MANAGER', 'EDITOR', 'EDITOR_DELETE'}
           .contains(_activeParent != null
               ? _currentFolderAccess : _selectedSpace!['access']);
@@ -102,6 +105,7 @@ class _DriveScreenState extends State<DriveScreen> {
     _spacesVersion++;
     _searchDebounce?.cancel();
     _searchController.dispose();
+    _contentScrollController.dispose();
     super.dispose();
   }
 
@@ -183,6 +187,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   void _selectSpace(String id) {
     if (_selectedSpaceId == id) return;
+    _resetContentScroll();
     _searchDebounce?.cancel();
     _searchController.clear();
     setState(() {
@@ -491,6 +496,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   void _openFolder(String? id) {
     if (_section == 'trash' || _activeParent == id) return;
+    _resetContentScroll();
     setState(() {
       _activeParent = id;
       _currentFolderAccess = null;
@@ -498,8 +504,15 @@ class _DriveScreenState extends State<DriveScreen> {
     _loadPersonalDrive();
   }
 
+  void _resetContentScroll() {
+    if (_contentScrollController.hasClients) {
+      _contentScrollController.jumpTo(0);
+    }
+  }
+
   void _switchSection(String next) {
     if (_section == next) return;
+    _resetContentScroll();
     _searchDebounce?.cancel();
     _spacesVersion++;
     _loadVersion++; // Invalidate any response from the previous tab.
@@ -1730,6 +1743,7 @@ class _DriveScreenState extends State<DriveScreen> {
                 onRefresh: _refreshDrive,
                 child: ListView(
                   key: const ValueKey('drive-tab-content'),
+                  controller: _contentScrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(13, 0, 13, 24),
                   children: [

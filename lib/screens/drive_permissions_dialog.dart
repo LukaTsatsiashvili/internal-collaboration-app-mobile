@@ -180,25 +180,50 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
     child: child,
   );
 
-  Widget _bulkButton(String label, VoidCallback callback) => Expanded(
-    child: SizedBox(
-      height: 34,
-      child: OutlinedButton(
-        onPressed: _saving ? null : callback,
-        style: OutlinedButton.styleFrom(
-          backgroundColor: p.card,
-          side: BorderSide(color: p.cardBorder),
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-        child: FittedBox(
-          child: Text(label, style: TextStyle(
-            color: p.secondaryText, fontSize: 10, fontWeight: FontWeight.w700,
-          )),
+  // The active bulk button follows the actual grants, not the last tap.
+  // Bulk actions apply only to the currently visible search results, just as
+  // in the Web permissions editor.
+  bool _isBulkActive(String? access) {
+    final visible = _visible;
+    final expected = access ?? 'NONE';
+    return visible.isNotEmpty &&
+        visible.every((recipient) =>
+            (_assignments[recipient.key] ?? 'NONE') == expected);
+  }
+
+  Widget _bulkButton(String label, String? access) {
+    final active = _isBulkActive(access);
+    return Expanded(
+      child: SizedBox(
+        height: 34,
+        child: OutlinedButton(
+          key: ValueKey('drive-bulk-${access ?? 'NONE'}'),
+          onPressed: _saving || _loading ? null : () => _bulk(access),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: active ? p.unreadBackground : p.card,
+            side: BorderSide(
+              color: active ? p.link : p.cardBorder,
+              width: active ? 1.5 : 1,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          child: FittedBox(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: active ? p.link : p.secondaryText,
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w800 : FontWeight.w700,
+              ),
+            ),
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _personRow(_Recipient r) {
     final current = _assignments[r.key] ?? 'NONE';
@@ -361,16 +386,15 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
                       ),
                       const SizedBox(height: 8),
                       Row(children: [
-                        _bulkButton('All Viewer', () => _bulk('VIEWER')),
+                        _bulkButton('All Viewer', 'VIEWER'),
                         const SizedBox(width: 5),
-                        _bulkButton('All Editor', () => _bulk('EDITOR')),
+                        _bulkButton('All Editor', 'EDITOR'),
                       ]),
                       const SizedBox(height: 5),
                       Row(children: [
-                        _bulkButton('All Edit/Delete',
-                            () => _bulk('EDITOR_DELETE')),
+                        _bulkButton('All Edit/Delete', 'EDITOR_DELETE'),
                         const SizedBox(width: 5),
-                        _bulkButton('Deselect all', () => _bulk(null)),
+                        _bulkButton('Deselect all', null),
                       ]),
                       const SizedBox(height: 13),
                       Row(children: [

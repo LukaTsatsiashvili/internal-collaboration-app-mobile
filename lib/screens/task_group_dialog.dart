@@ -9,12 +9,25 @@ class TaskGroupDialog extends StatefulWidget {
     super.key,
     this.initialName,
     this.renameTitle = 'Rename approval group',
+    this.createTitle = 'New Group',
+    this.fieldLabel = 'Group name',
+    this.fieldHint = 'Enter group name...',
+    this.createButtonLabel = 'Create group',
+    this.maxNameLength = 120,
+    this.validateName,
   });
 
   /// When provided, reuse this visual for the approval group rename flow.
   final String? initialName;
   /// Shared visual for task and approval group rename flows.
   final String renameTitle;
+  /// Optional wording and validation to reuse the same visual for Drive folders.
+  final String createTitle;
+  final String fieldLabel;
+  final String fieldHint;
+  final String createButtonLabel;
+  final int maxNameLength;
+  final String? Function(String)? validateName;
 
   @override
   State<TaskGroupDialog> createState() => _TaskGroupDialogState();
@@ -40,8 +53,14 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
 
   void _submit() {
     final name = _name.text.trim();
-    if (name.isEmpty || name.length > 120) {
-      setState(() => _error = 'მიუთითე ჯგუფის სახელი (მაქს. 120 სიმბოლო)');
+    if (name.isEmpty || name.length > widget.maxNameLength) {
+      setState(() => _error =
+          'Enter a name (maximum ${widget.maxNameLength} characters)');
+      return;
+    }
+    final validationError = widget.validateName?.call(name);
+    if (validationError != null) {
+      setState(() => _error = validationError);
       return;
     }
     // Pop is synchronous, using the *still mounted* dialog context.
@@ -87,7 +106,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      _editing ? widget.renameTitle : 'New Group',
+                      _editing ? widget.renameTitle : widget.createTitle,
                       style: TextStyle(
                         color: p.ink,
                         fontSize: 18,
@@ -119,7 +138,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
               TextField(
                 controller: _name,
                 autofocus: true,
-                maxLength: 120,
+                maxLength: widget.maxNameLength,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
                 onChanged: (_) {
@@ -139,7 +158,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: p.card,
-                  labelText: 'Group name',
+                  labelText: widget.fieldLabel,
                   floatingLabelBehavior: FloatingLabelBehavior.always,
                   labelStyle: TextStyle(
                     color: p.secondaryText,
@@ -151,7 +170,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
-                  hintText: 'Enter group name...',
+                  hintText: widget.fieldHint,
                   hintStyle: TextStyle(
                     color: p.hintText,
                     fontSize: 12,
@@ -188,7 +207,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                 builder: (context, value, child) => Align(
                   alignment: Alignment.centerRight,
                   child: Text(
-                    value.text.length.toString() + '/120',
+                    '${value.text.length}/${widget.maxNameLength}',
                     style: TextStyle(
                       color: p.muted,
                       fontSize: 10.5,
@@ -242,7 +261,7 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
                           padding: const EdgeInsets.symmetric(horizontal: 19),
                           child: Center(
                             child: Text(
-                              _editing ? 'Save' : 'Create group',
+                              _editing ? 'Save' : widget.createButtonLabel,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12.5,

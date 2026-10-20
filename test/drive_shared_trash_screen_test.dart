@@ -1,0 +1,204 @@
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:gtex_collab_app/core/theme/app_theme.dart';
+import 'package:gtex_collab_app/features/drive/data/drive_download.dart';
+import 'package:gtex_collab_app/features/drive/data/drive_service.dart';
+import 'package:gtex_collab_app/screens/drive_screen.dart';
+
+Map<String, dynamic> _item(
+  String id,
+  String name, {
+  bool folder = false,
+  bool deleted = false,
+  String? parentId,
+}) => {
+  'id': id,
+  'name': name,
+  'kind': folder ? 'FOLDER' : 'FILE',
+  'parentId': parentId,
+  'access': deleted ? 'OWNER' : 'VIEWER',
+  'owner': {'displayName': deleted ? 'Me' : 'Luka'},
+  'file': folder ? null : {
+    'id': 'file-$id',
+    'mimeType': 'application/pdf',
+    'sizeBytes': 4,
+  },
+  'updatedAt': '2026-10-20T08:00:00.000Z',
+  if (deleted) 'deletedAt': '2026-10-20T10:00:00.000Z',
+};
+
+class _DriveSectionsService extends DriveService {
+  final calls = <String>[];
+  final restores = <String>[];
+  final downloads = <String>[];
+  final trash = <Map<String, dynamic>>[
+    _item('trashed-file', 'Deleted document.pdf', deleted: true),
+    _item('trashed-folder', 'Old folder', folder: true, deleted: true),
+  ];
+
+  @override
+  Future<PersonalDriveListing> getPersonalListing({String? parentId}) async {
+    calls.add('personal:$parentId');
+    return PersonalDriveListing(items: [
+      _item('my-file', 'My document.pdf'),
+    ], usedBytes: 4);
+  }
+
+  @override
+  Future<PersonalDriveListing> getDriveView({
+    required String view,
+    String? parentId,
+  }) async {
+    calls.add('$view:$parentId');
+    if (view == 'trash') {
+      return PersonalDriveListing(
+        items: List<Map<String, dynamic>>.from(trash),
+        usedBytes: 0,
+      );
+    }
+    return PersonalDriveListing(
+      items: parentId == null
+          ? [
+              _item('shared-folder', 'Team folder', folder: true),
+              _item('shared-file', 'Shared presentation.pdf'),
+            ]
+          : [_item('nested-file', 'Inside folder.pdf',
+              parentId: 'shared-folder')],
+      usedBytes: 0,
+      breadcrumbs: parentId == null ? [] : [
+        {'id': 'shared-folder', 'name': 'Team folder'},
+      ],
+    );
+  }
+
+  @override
+  Future<Uint8List> downloadFile(String id) async {
+    downloads.add(id);
+    return Uint8List.fromList([37, 80, 68, 70]);
+  }
+
+  @override
+  Future<void> restoreItem(String id) async {
+    restores.add(id);
+    trash.removeWhere((item) => item['id'] == id);
+  }
+}
+
+Future<void> _pumpDrive(
+  WidgetTester tester,
+  _DriveSectionsService service, {
+  bool dark = false,
+}) async {
+  await tester.pumpWidget(MaterialApp(
+    theme: AppTheme.light,
+    darkTheme: AppTheme.dark,
+    themeMode: dark ? ThemeMode.dark : ThemeMode.light,
+    home: DriveScreen(
+      service: service,
+      downloadSaver: (bytes, filename) async =>
+          const DriveDownloadResult(saved: true, opened: true),
+    ),
+  ));
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('Shared With Me reads server view and exposes Download only',
+      (tester) async {
+    final service = _DriveSectionsService();
+    await _pumpDrive(tester, service);
+
+    expect(find.text('Upload files'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('drive-tab-shared-with-me')));
+    await tester.pumpAndSettle();
+
+    expect(service.calls, contains('shared-with-me:null'));
+    expect(find.text('Shared presentation.pdf'), findsOneWidget);
+    expect(find.text('Team folder'), findsOneWidget);
+    expect(find.text('Upload files'), findsNothing);
+    expect(find.byTooltip('Download'), findsOneWidget);
+    expect(find.byTooltip('Rename'), findsNothing);
+    expect(find.byTooltip('Permissions'), findsNothing);
+    expect(find.byTooltip('Move'), findsNothing);
+    expect(find.byTooltip('Delete'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.byTooltip('Download'));
+    await tester.pump();
+    expect(service.downloads, ['file-shared-file']);
+
+    await tester.tap(find.text('Team folder'));
+    await tester.pumpAndSettle();
+    expect(service.calls.last, 'shared-with-me:shared-folder');
+    expect(find.text('Inside folder.pdf'), findsOneWidget);
+  });
+
+  testWidgets('Trash matches screenshot and restores real Drive items',
+      (tester) async {
+    final service = _DriveSectionsService();
+    await _pumpDrive(tester, service, dark: true);
+
+    await tester.tap(find.byKey(const ValueKey('drive-tab-trash')));
+    await tester.pumpAndSettle();
+
+    expect(service.calls.last, 'trash:null');
+    expect(find.text('Empty Trash'), findsOneWidget);
+    final clearButton = tester.widget<ElevatedButton>(
+      find.byKey(const ValueKey('drive-empty-trash')),
+    );
+    expect(clearButton.onPressed, isNull);
+
+    expect(find.textContaining('permanently deleted after 30 days'),
+        findsOneWidget);
+    expect(find.text('Deleted document.pdf'), findsOneWidget);
+    expect(find.text('Old folder'), findsOneWidget);
+    expect(find.byTooltip('Restore'), findsNWidgets(2));
+    expect(find.byKey(const ValueKey('drive-permanent-delete')),
+        findsNWidgets(2));
+    expect(find.byTooltip('Download'), findsNothing);
+    expect(find.byTooltip('Delete'), findsNothing);
+    expect(find.text('2 items in Trash'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Restore').first);
+    await tester.pumpAndSettle();
+    expect(service.restores, ['trashed-file']);
+    expect(find.text('Deleted document.pdf'), findsNothing);
+    expect(find.text('1 item in Trash'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Trash search and returning to Personal resets section state',
+      (tester) async {
+    final service = _DriveSectionsService();
+    await _pumpDrive(tester, service);
+    await tester.tap(find.byKey(const ValueKey('drive-tab-trash')));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'Old');
+    await tester.pump();
+    expect(find.text('Old folder'), findsOneWidget);
+    expect(find.text('Deleted document.pdf'), findsNothing);
+    expect(find.text('1 item in Trash'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('drive-tab-personal')));
+    await tester.pumpAndSettle();
+    expect(service.calls.last, 'personal:null');
+    expect(find.text('My document.pdf'), findsOneWidget);
+    expect(find.text('Old folder'), findsNothing);
+    expect(find.text('Upload files'), findsOneWidget);
+    expect(find.text('Search files and folders'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Shared placeholder does not navigate or fetch data',
+      (tester) async {
+    final service = _DriveSectionsService();
+    await _pumpDrive(tester, service);
+    await tester.tap(find.byKey(const ValueKey('drive-tab-shared')));
+    await tester.pump();
+    expect(service.calls, ['personal:null']);
+    expect(find.text('My document.pdf'), findsOneWidget);
+  });
+}

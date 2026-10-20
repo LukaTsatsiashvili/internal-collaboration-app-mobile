@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_colors.dart';
+import '../core/widgets/app_modal_elements.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/drive/data/drive_service.dart';
 
@@ -108,26 +108,9 @@ class _DriveMoveDialogState extends State<DriveMoveDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Move ${widget.item['name']}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: p.ink,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    icon: Icon(Icons.close_rounded, color: p.muted),
-                  ),
-                ],
+              AppModalHeader(
+                title: 'Move ${widget.item['name']}',
+                onClose: _saving ? null : () => Navigator.of(context).pop(),
               ),
               const SizedBox(height: 15),
               Wrap(
@@ -173,27 +156,56 @@ class _DriveMoveDialogState extends State<DriveMoveDialog> {
                               ))
                             : ListView.separated(
                                 shrinkWrap: true,
-                                padding: const EdgeInsets.symmetric(vertical: 5),
+                                padding: const EdgeInsets.symmetric(vertical: 9),
                                 itemCount: _folders.length,
                                 separatorBuilder: (_, _) =>
                                     Divider(color: p.cardBorder, height: 1),
                                 itemBuilder: (context, index) {
                                   final folder = _folders[index];
-                                  return ListTile(
-                                    onTap: _saving ? null :
-                                        () => _browse(folder['id'].toString()),
-                                    leading: Icon(Icons.folder_outlined,
-                                        color: p.secondaryText),
-                                    title: Text(
-                                      (folder['name'] ?? '').toString(),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(color: p.ink,
-                                          fontWeight: FontWeight.w700),
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _saving ? null
+                                          : () => _browse(folder['id'].toString()),
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: SizedBox(
+                                        height: 64,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                          ),
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
+                                            children: [
+                                              Icon(
+                                                Icons.folder_outlined,
+                                                size: 20,
+                                                color: p.secondaryText,
+                                              ),
+                                              const SizedBox(width: 13),
+                                              Expanded(
+                                                child: Text(
+                                                  (folder['name'] ?? '').toString(),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: TextStyle(
+                                                    color: p.ink,
+                                                    fontSize: 13,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Icon(
+                                                Icons.chevron_right_rounded,
+                                                size: 20,
+                                                color: p.muted,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                    trailing: Icon(
-                                        Icons.chevron_right_rounded,
-                                        color: p.muted),
                                   );
                                 },
                               ),
@@ -206,32 +218,38 @@ class _DriveMoveDialogState extends State<DriveMoveDialog> {
               const SizedBox(height: 18),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  OutlinedButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 10),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [
-                        AppColors.gradientStart, AppColors.gradientEnd,
-                      ]),
-                      borderRadius: BorderRadius.circular(15),
+                  SizedBox(
+                    width: 100,
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: _saving ? null
+                          : () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: p.cardBorder),
+                        foregroundColor: p.secondaryText,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          'Cancel',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
-                    child: ElevatedButton(
+                  ),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 127,
+                    child: AppModalPrimaryButton(
+                      label: 'Move here',
+                      busy: _saving,
                       onPressed: _saving || _loading || _error != null ||
                           _parent == widget.item['parentId'] ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _saving
-                          ? const SizedBox(width: 18, height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                          : const Text('Move here'),
                     ),
                   ),
                 ],

@@ -53,12 +53,53 @@ class UniverExcelExport {
               value = TextCellValue(raw.toString());
             }
             if (value == null) continue;
+            final styles = snapshot['styles'];
+            final styleRef = cell['s'];
+            final style = styleRef is String && styles is Map
+                ? styles[styleRef] : styleRef;
+            final format = style is Map && style['n'] is Map
+                ? (style['n'] as Map)['pattern'] : null;
+            CellStyle? cellStyle;
+            if (format is String && format.isNotEmpty) {
+              cellStyle = CellStyle(
+                numberFormat: NumFormat.custom(formatCode: format),
+              );
+            }
             output.updateCell(
               CellIndex.indexByColumnRow(
                   columnIndex: columnIndex, rowIndex: rowIndex),
               value,
+              cellStyle: cellStyle,
             );
           }
+        }
+      }
+
+
+      final rowData = data['rowData'];
+      if (rowData is Map) {
+        for (final entry in rowData.entries) {
+          final row = int.tryParse(entry.key.toString());
+          if (row == null || row < 0 || entry.value is! Map) continue;
+          final meta = entry.value as Map;
+          if (meta['h'] is num) {
+            output.setRowHeight(row, (meta['h'] as num).toDouble());
+          }
+          if (meta['hd'] == 1) output.setRowHidden(row, true);
+        }
+      }
+      final columnData = data['columnData'];
+      if (columnData is Map) {
+        for (final entry in columnData.entries) {
+          final col = int.tryParse(entry.key.toString());
+          if (col == null || col < 0 || entry.value is! Map) continue;
+          final meta = entry.value as Map;
+          if (meta['w'] is num) {
+            // Stored by Univer in px; excel_community uses character width.
+            output.setColumnWidth(
+                col, (meta['w'] as num).toDouble() / 8);
+          }
+          if (meta['hd'] == 1) output.setColumnHidden(col, true);
         }
       }
 

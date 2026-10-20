@@ -88,7 +88,7 @@ void main() {
     await tester.pump();
     expect(find.text('Budget plan'), findsOneWidget);
     expect(find.text('Marketing'), findsNothing);
-    expect(find.text('1 items · 2.0 KB in Personal'), findsOneWidget);
+    expect(find.text('1 item · 2.0 KB in Personal'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Search files and folders'),

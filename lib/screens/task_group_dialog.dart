@@ -55,7 +55,9 @@ class _TaskGroupDialogState extends State<TaskGroupDialog> {
     final name = _name.text.trim();
     if (name.isEmpty || name.length > widget.maxNameLength) {
       setState(() => _error =
-          'Enter a name (maximum ${widget.maxNameLength} characters)');
+          widget.maxNameLength == 120 && widget.createTitle == 'New Group'
+              ? 'მიუთითე ჯგუფის სახელი (მაქს. 120 სიმბოლო)'
+              : 'Enter a name (maximum ${widget.maxNameLength} characters)');
       return;
     }
     final validationError = widget.validateName?.call(name);

@@ -180,7 +180,12 @@ void main() {
     await _load(tester, fake);
     expect(find.byKey(const ValueKey('shared-members')), findsNothing);
     expect(find.byKey(const ValueKey('shared-add-group')), findsNothing);
-    expect(find.text('Upload files'), findsNothing);
+    expect(find.text('Upload files'), findsOneWidget);
+    // Viewer keeps the same header but cannot trigger uploads.
+    expect(find.byType(Opacity).where((finder) {
+      final widget = tester.widget<Opacity>(finder);
+      return widget.opacity == 0.42;
+    }), findsOneWidget);
     expect(find.byTooltip('Download'), findsOneWidget);
     expect(find.byTooltip('Rename'), findsOneWidget);
     final rename = tester.widget<IconButton>(find.byTooltip('Rename').first);
@@ -200,7 +205,7 @@ void main() {
     expect(find.text('Q4.xlsx'), findsOneWidget);
     // Folder-level custom Viewer access overrides Global's Manager role
     // for upload/create actions in the current folder.
-    expect(find.text('Upload files'), findsNothing);
+    expect(find.text('Upload files'), findsOneWidget);
   });
 
   testWidgets('Add shared group selects newly created group',

@@ -20,6 +20,25 @@ The mobile app requires the new `webview_flutter` dependency. Run
 `flutter pub get` (and commit the regenerated `pubspec.lock` in your
 Flutter environment) before `flutter run`.
 
+## Isolated staging deployment
+
+A separate deployment is recommended instead of switching the production
+checkout to `dev-luka`. The web app needs the new `/mobile/sheets/:id`
+route and backend `/api/v1/auth/mobile-webview-session` endpoint.
+
+In an isolated staging build, use matching origins:
+
+```bash
+flutter run \
+  --dart-define=COLLAB_ORIGIN=https://collaboration-dev.gtexshop.ge \
+  --dart-define=COLLAB_API_BASE_URL=https://collaboration-dev.gtexshop.ge/api/v1
+```
+
+Both values default to the existing production host if they are omitted.
+For Docker Compose staging use a separate project name, database/volumes and
+web port (e.g. `docker compose -p collaboration-dev ...`, `WEB_PORT=8081`).
+Never point a staging migration/seed command at the real production database.
+
 ## Implementation
 
 1. Drive → New Spreadsheet opens the existing app-styled name dialog.

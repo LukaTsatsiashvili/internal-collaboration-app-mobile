@@ -15,11 +15,6 @@ class SpreadsheetScreen extends StatefulWidget {
   final String id;
   final String name;
 
-  @override
-  State<SpreadsheetScreen> createState() => _SpreadsheetScreenState();
-}
-
-class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
   /// The editor and REST API must use the same origin. This defaults to
   /// collaboration.gtexshop.ge; optional API URL overrides automatically
   /// update the editor too, preventing cross-environment mismatches.
@@ -34,6 +29,12 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
       fragment: null,
     );
   }
+
+  @override
+  State<SpreadsheetScreen> createState() => _SpreadsheetScreenState();
+}
+
+class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
   static const _storage = FlutterSecureStorage();
 
   late final WebViewController _webView;
@@ -58,7 +59,7 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           // in-memory token. Never allow a cross-origin redirect.
           if (!request.isMainFrame) return NavigationDecision.navigate;
           final uri = Uri.tryParse(request.url);
-          final allowed = editorUri(widget.id);
+          final allowed = SpreadsheetScreen.editorUri(widget.id);
           if (uri?.origin == allowed.origin && uri?.path == allowed.path &&
               uri?.query.isEmpty == true && uri?.fragment.isEmpty == true) {
             return NavigationDecision.navigate;
@@ -86,7 +87,7 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           }
         },
       ))
-      ..loadRequest(editorUri(widget.id));
+      ..loadRequest(SpreadsheetScreen.editorUri(widget.id));
   }
 
   Future<void> _onBridgeMessage(JavaScriptMessage message) async {

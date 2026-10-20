@@ -8,7 +8,7 @@ void main() {
     final request = RequestOptions(
       path: '/drive/some-id',
       method: 'DELETE',
-      headers: {'Content-Type': 'application/json'},
+      headers: {'content-type': 'application/json'},
     );
 
     ApiClient.omitContentTypeForBodylessDelete(request);
@@ -25,7 +25,7 @@ void main() {
       path: '/example',
       method: 'DELETE',
       data: {'reason': 'test'},
-      headers: {'Content-Type': 'application/json'},
+      headers: {'content-type': 'application/json'},
     );
     ApiClient.omitContentTypeForBodylessDelete(request);
     expect(request.contentType, 'application/json');
@@ -37,7 +37,7 @@ void main() {
       path: '/drive',
       method: 'POST',
       data: {'name': 'Reports'},
-      headers: {'Content-Type': 'application/json'},
+      headers: {'content-type': 'application/json'},
     );
     ApiClient.omitContentTypeForBodylessDelete(request);
     expect(request.contentType, 'application/json');

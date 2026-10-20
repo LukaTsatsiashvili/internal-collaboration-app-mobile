@@ -46,7 +46,8 @@ class RecordingFolderService extends FakeDriveService {
   final createdNames = <String>[];
 
   @override
-  Future<Map<String, dynamic>> createFolder(String name) async {
+  Future<Map<String, dynamic>> createFolder(String name,
+      {String? parentId}) async {
     createdNames.add(name);
     final folder = <String, dynamic>{
       'id': 'new-folder',

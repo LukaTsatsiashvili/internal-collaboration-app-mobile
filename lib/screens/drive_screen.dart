@@ -15,6 +15,7 @@ import 'drive_move_dialog.dart';
 import 'drive_permissions_dialog.dart';
 import 'drive_members_dialog.dart';
 import 'task_group_dialog.dart';
+import 'spreadsheet_screen.dart';
 
 /// Visual-first Personal Drive, styled with the same semantic palette and
 /// search field as Messages. All listed data comes from the real Drive API.
@@ -55,6 +56,7 @@ class _DriveScreenState extends State<DriveScreen> {
   bool _newestFirst = true;
   bool _importingExcel = false;
   bool _creatingFolder = false;
+  bool _creatingSpreadsheet = false;
   bool _uploadingFiles = false;
   int _uploadNumber = 0;
   int _uploadCount = 0;
@@ -338,6 +340,59 @@ class _DriveScreenState extends State<DriveScreen> {
   String _errorMessage(Object error) => error
       .toString()
       .replaceFirst(RegExp(r'^(Exception|FormatException|Bad state):\s*'), '');
+
+  Future<void> _openSpreadsheet(Map<String, dynamic> item) async {
+    final id = (item['id'] ?? '').toString();
+    if (id.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SpreadsheetScreen(
+          id: id,
+          name: (item['name'] ?? 'Spreadsheet').toString(),
+        ),
+      ),
+    );
+    if (mounted) await _refreshDrive();
+  }
+
+  Future<void> _newSpreadsheet() async {
+    if (!_canWriteHere || _creatingSpreadsheet || _creatingFolder ||
+        _importingExcel || _uploadingFiles) return;
+    final name = await showDialog<String>(
+      context: context,
+      builder: (_) => TaskGroupDialog(
+        createTitle: 'New Spreadsheet',
+        fieldLabel: 'Spreadsheet name',
+        fieldHint: 'Enter spreadsheet name...',
+        createButtonLabel: 'Create Spreadsheet',
+        maxNameLength: 200,
+        validateName: (text) {
+          if (text == '.' || text == '..' ||
+              RegExp(r'[\\x00-\\x1f/\\\\]').hasMatch(text)) {
+            return 'Choose a name without slashes or control characters';
+          }
+          return null;
+        },
+      ),
+    );
+    if (!mounted || name == null) return;
+    setState(() => _creatingSpreadsheet = true);
+    try {
+      final created = await _driveService.createSpreadsheet(
+        name,
+        parentId: _activeParent,
+        spaceId: _section == 'shared' ? _selectedSpaceId : null,
+      );
+      if (!mounted) return;
+      await _refreshDrive();
+      if (!mounted) return;
+      await _openSpreadsheet(created);
+    } catch (error) {
+      _feedback(_errorMessage(error), error: true);
+    } finally {
+      if (mounted) setState(() => _creatingSpreadsheet = false);
+    }
+  }
 
   Future<void> _newFolder() async {
     if (_creatingFolder || _importingExcel || _uploadingFiles) return;
@@ -897,7 +952,7 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _quickActions() {
-    final busy = _importingExcel || _creatingFolder || _uploadingFiles ||
+    final busy = _importingExcel || _creatingFolder || _creatingSpreadsheet || _uploadingFiles ||
         !_canWriteHere;
     return Opacity(
       opacity: _canWriteHere ? 1 : 0.48,
@@ -920,7 +975,8 @@ class _DriveScreenState extends State<DriveScreen> {
             Icons.table_chart_outlined,
             const Color(0xFF14AD86),
             151,
-            onTap: busy ? null : () => _later('New Spreadsheet'),
+            onTap: busy ? null : _newSpreadsheet,
+            loading: _creatingSpreadsheet,
           ),
           const SizedBox(width: 8),
           _quickButton(
@@ -1351,7 +1407,9 @@ class _DriveScreenState extends State<DriveScreen> {
       child: Column(
         children: [
           InkWell(
-            onTap: folder ? () => _openFolder(item['id'].toString()) : null,
+            onTap: folder
+                ? () => _openFolder(item['id'].toString())
+                : sheet ? () => _openSpreadsheet(item) : null,
             borderRadius: BorderRadius.circular(12),
             child: Row(
             children: [

@@ -74,6 +74,28 @@ class _DriveSectionsService extends DriveService {
   }
 
   @override
+  Future<DriveSpaces> getSpaces() async {
+    calls.add('spaces');
+    return const DriveSpaces(
+      spaces: [
+        {'id': 'global-id', 'name': 'Global', 'type': 'GLOBAL',
+         'access': 'VIEWER'},
+      ],
+      canCreateGroups: false,
+      canManageGlobal: false,
+    );
+  }
+
+  @override
+  Future<PersonalDriveListing> getSharedListing({
+    required String spaceId,
+    String? parentId,
+  }) async {
+    calls.add('shared:$spaceId:$parentId');
+    return const PersonalDriveListing(items: [], usedBytes: 0);
+  }
+
+  @override
   Future<Uint8List> downloadFile(String id) async {
     downloads.add(id);
     return Uint8List.fromList([37, 80, 68, 70]);
@@ -197,13 +219,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Shared placeholder does not navigate or fetch data',
+  testWidgets('Shared tab loads Global space with Viewer access',
       (tester) async {
     final service = _DriveSectionsService();
     await _pumpDrive(tester, service);
     await tester.tap(find.byKey(const ValueKey('drive-tab-shared')));
-    await tester.pump();
-    expect(service.calls, ['personal:null']);
-    expect(find.text('My document.pdf'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(service.calls, ['personal:null', 'spaces',
+      'shared:global-id:null']);
+    expect(find.text('Company-wide shared space'), findsOneWidget);
+    expect(find.byKey(const ValueKey('shared-space-global-id')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('shared-members')), findsNothing);
+    expect(find.text('Upload files'), findsNothing);
+    expect(find.text('No files or folders in this shared space'),
+        findsOneWidget);
   });
 }

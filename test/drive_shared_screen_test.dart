@@ -34,7 +34,7 @@ class _SharedFake extends DriveService {
 
   @override
   Future<PersonalDriveListing> getSharedListing({
-    required String spaceId, String? parentId,
+    required String spaceId, String? parentId, String? search,
   }) async {
     calls.add('listing:$spaceId:$parentId');
     if (parentId != null) {

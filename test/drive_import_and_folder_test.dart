@@ -151,6 +151,33 @@ void main() {
     expect((payloads.last as Map)['view'], 'personal');
   });
 
+  test('New Spreadsheet creates a Drive-backed workbook in the chosen folder', () async {
+    final requests = <String>[];
+    final payloads = <Object?>[];
+    final service = DriveService(dio: stubDio(requests, payloads: payloads));
+    final created = await service.createSpreadsheet(' Weekly report ',
+        parentId: 'folder-123', spaceId: 'group-space-1');
+    expect(created['id'], 'sheet-123');
+    expect(requests, ['POST /drive/sheets']);
+    expect(payloads.single, {
+      'name': 'Weekly report',
+      'parentId': 'folder-123',
+      'spaceId': 'group-space-1',
+    });
+    // Creating a new blank workbook must not perform an extra PUT.
+    // The Univer editor initializes the empty snapshot on first open.
+  });
+
+  test('invalid spreadsheet names never call the backend', () async {
+    final requests = <String>[];
+    final service = DriveService(dio: stubDio(requests));
+    await expectLater(
+      service.createSpreadsheet('Bad/Name'),
+      throwsA(isA<FormatException>()),
+    );
+    expect(requests, isEmpty);
+  });
+
   test('imports Excel through POST sheet then PUT snapshot', () async {
     final requests = <String>[];
     final payloads = <Object?>[];

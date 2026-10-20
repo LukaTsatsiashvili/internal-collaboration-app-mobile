@@ -165,11 +165,11 @@ void main() {
     expect(find.text('Upload files'), findsNothing);
     expect(find.byTooltip('Download'), findsOneWidget);
     expect(find.byTooltip('Rename'), findsOneWidget);
-    final rename = tester.widget<IconButton>(find.byTooltip('Rename'));
+    final rename = tester.widget<IconButton>(find.byTooltip('Rename').first);
     expect(rename.onPressed, isNull);
     expect(find.byTooltip('Delete'), findsOneWidget);
     expect(tester.widget<IconButton>(
-        find.byTooltip('Delete')).onPressed, isNull);
+        find.byTooltip('Delete').first).onPressed, isNull);
   });
 
   testWidgets('Shared folder can be browsed and returns breadcrumbs',

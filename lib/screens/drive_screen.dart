@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -44,6 +45,8 @@ class _DriveScreenState extends State<DriveScreen> {
   String _section = 'personal';
   List<Map<String, dynamic>> _spaces = [];
   String? _selectedSpaceId;
+  String? _currentFolderAccess;
+  Timer? _searchDebounce;
   bool _canCreateGroups = false;
   bool _loadingSpaces = false;
   String? _error;
@@ -73,9 +76,10 @@ class _DriveScreenState extends State<DriveScreen> {
     return null;
   }
 
-  bool get _canWriteShared => _selectedSpace != null &&
+  bool get _canWriteShared => _selectedSpace != null && !_loading &&
       const {'OWNER', 'MANAGER', 'EDITOR', 'EDITOR_DELETE'}
-          .contains(_selectedSpace!['access']);
+          .contains(_activeParent != null
+              ? _currentFolderAccess : _selectedSpace!['access']);
   bool get _canManageShared => _selectedSpace != null &&
       const {'OWNER', 'MANAGER'}.contains(_selectedSpace!['access']);
 
@@ -89,6 +93,7 @@ class _DriveScreenState extends State<DriveScreen> {
   @override
   void dispose() {
     _loadVersion++;
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -105,7 +110,8 @@ class _DriveScreenState extends State<DriveScreen> {
           ? await _driveService.getPersonalListing(parentId: _activeParent)
           : _section == 'shared' && _selectedSpaceId != null
               ? await _driveService.getSharedListing(
-                  spaceId: _selectedSpaceId!, parentId: _activeParent)
+                  spaceId: _selectedSpaceId!,
+                  parentId: _activeParent, search: _query)
               : _section == 'shared'
                   ? const PersonalDriveListing(items: [], usedBytes: 0)
                   : await _driveService.getDriveView(
@@ -118,6 +124,7 @@ class _DriveScreenState extends State<DriveScreen> {
         _items = listing.items;
         _usedBytes = listing.usedBytes;
         _breadcrumbs = listing.breadcrumbs;
+        _currentFolderAccess = listing.folderAccess;
       });
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
@@ -172,6 +179,7 @@ class _DriveScreenState extends State<DriveScreen> {
     setState(() {
       _selectedSpaceId = id;
       _activeParent = null;
+      _currentFolderAccess = null;
       _breadcrumbs = [];
       _query = '';
     });
@@ -319,6 +327,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Future<void> _newFolder() async {
     if (_creatingFolder || _importingExcel || _uploadingFiles) return;
+    if (_section == 'shared' && !_canWriteShared) return;
     final name = await showDialog<String>(
       context: context,
       builder: (_) => TaskGroupDialog(
@@ -353,6 +362,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Future<void> _uploadFiles() async {
     if (_uploadingFiles || _importingExcel || _creatingFolder) return;
+    if (_section == 'shared' && !_canWriteShared) return;
     try {
       final selected = await (widget.filePicker ?? openFiles)();
       if (!mounted || selected.isEmpty) return;
@@ -437,6 +447,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Future<void> _importExcel() async {
     if (_importingExcel || _creatingFolder || _uploadingFiles) return;
+    if (_section == 'shared' && !_canWriteShared) return;
     try {
       final file = await openFile(
         acceptedTypeGroups: [
@@ -471,15 +482,22 @@ class _DriveScreenState extends State<DriveScreen> {
 
   void _openFolder(String? id) {
     if (_section == 'trash' || _activeParent == id) return;
-    setState(() => _activeParent = id);
+    setState(() {
+      _activeParent = id;
+      _currentFolderAccess = null;
+    });
     _loadPersonalDrive();
   }
 
   void _switchSection(String next) {
     if (_section == next) return;
+    _searchDebounce?.cancel();
+    _loadVersion++; // Invalidate any response from the previous tab.
     _searchController.clear();
     setState(() {
       _section = next;
+      if (next == 'shared') _selectedSpaceId = null;
+      _currentFolderAccess = null;
       _activeParent = null;
       _breadcrumbs = [];
       _query = '';
@@ -900,7 +918,15 @@ class _DriveScreenState extends State<DriveScreen> {
       child: TextField(
         controller: _searchController,
         textInputAction: TextInputAction.search,
-        onChanged: (value) => setState(() => _query = value),
+        onChanged: (value) {
+          setState(() => _query = value);
+          if (_section == 'shared') {
+            _searchDebounce?.cancel();
+            _searchDebounce = Timer(const Duration(milliseconds: 280), () {
+              if (mounted && _section == 'shared') _loadPersonalDrive();
+            });
+          }
+        },
         style: TextStyle(
           color: _p.ink,
           fontSize: 13,
@@ -923,7 +949,9 @@ class _DriveScreenState extends State<DriveScreen> {
                   icon: const Icon(Icons.close_rounded, size: 17),
                   onPressed: () {
                     _searchController.clear();
+                    _searchDebounce?.cancel();
                     setState(() => _query = '');
+                    if (_section == 'shared') _loadPersonalDrive();
                   },
                 )
               : null,

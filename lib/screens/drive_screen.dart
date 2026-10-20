@@ -84,6 +84,11 @@ class _DriveScreenState extends State<DriveScreen> {
   bool get _canManageShared => _selectedSpace != null &&
       const {'OWNER', 'MANAGER'}.contains(_selectedSpace!['access']);
 
+  // The action header always exists; only its enabled state changes.
+  bool get _canWriteHere => _section == 'personal' ||
+      (_section == 'shared' && _canWriteShared);
+
+
   @override
   void initState() {
     super.initState();
@@ -729,7 +734,9 @@ class _DriveScreenState extends State<DriveScreen> {
         SizedBox(
           width: double.infinity,
           height: 48,
-          child: DecoratedBox(
+          child: Opacity(
+            opacity: _canWriteHere ? 1 : 0.42,
+            child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [AppColors.gradientStart, AppColors.gradientEnd],
@@ -746,7 +753,7 @@ class _DriveScreenState extends State<DriveScreen> {
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: busy ? null : _uploadFiles,
+                onTap: busy || !_canWriteHere ? null : _uploadFiles,
                 borderRadius: BorderRadius.circular(15),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -778,6 +785,7 @@ class _DriveScreenState extends State<DriveScreen> {
                 ),
               ),
             ),
+          ),
           ),
         ),
         if (_uploadingFiles) ...[
@@ -876,8 +884,11 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _quickActions() {
-    final busy = _importingExcel || _creatingFolder || _uploadingFiles;
-    return SingleChildScrollView(
+    final busy = _importingExcel || _creatingFolder || _uploadingFiles ||
+        !_canWriteHere;
+    return Opacity(
+      opacity: _canWriteHere ? 1 : 0.48,
+      child: SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       physics: const BouncingScrollPhysics(),
       child: Row(
@@ -907,6 +918,7 @@ class _DriveScreenState extends State<DriveScreen> {
             onTap: busy ? null : _newFolder,
           ),
         ],
+      ),
       ),
     );
   }
@@ -938,9 +950,7 @@ class _DriveScreenState extends State<DriveScreen> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: _section == 'trash'
-              ? 'Search in Trash'
-              : 'Search files and folders',
+          hintText: 'Search files and folders',
           hintStyle: TextStyle(
             color: _p.hintText,
             fontSize: 12,
@@ -1684,7 +1694,6 @@ class _DriveScreenState extends State<DriveScreen> {
   @override
   Widget build(BuildContext context) {
     final visible = _visibleItems;
-    final isPersonal = _section == 'personal';
     final isTrash = _section == 'trash';
     final isSharedWithMe = _section == 'shared-with-me';
     final isShared = _section == 'shared';
@@ -1692,82 +1701,97 @@ class _DriveScreenState extends State<DriveScreen> {
     return Scaffold(
       backgroundColor: _p.page,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshDrive,
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(13, 12, 13, 24),
-            children: [
-              _header(),
-              const SizedBox(height: 13),
-              // Keep upload actions in the same top section for Personal
-              // and writable Shared spaces, before Search and tabs.
-              // The currently selected space/folder still decides access.
-              if (isPersonal || (isShared && _canWriteShared)) ...[
-                _uploadButton(),
-                const SizedBox(height: 10),
-                _quickActions(),
-                const SizedBox(height: 15),
-              ],
-              if (isTrash) _trashTop(),
-              _searchField(),
-              const SizedBox(height: 13),
-              _tabs(),
-              const SizedBox(height: 12),
-              if (isTrash) ...[
-                _trashInfo(),
-                const SizedBox(height: 12),
-              ],
-              if (isShared) _sharedControls(),
-              if (_activeParent != null && !isTrash) _folderPath(),
-              _fileHeading(),
-              const SizedBox(height: 7),
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_error != null)
-                _messagePanel(Icons.cloud_off_outlined, _error!, retry: true)
-              else if (visible.isEmpty)
-                _messagePanel(
-                  Icons.folder_open_outlined,
-                  _query.isNotEmpty
-                      ? 'No files or folders match your search'
-                      : isTrash
-                          ? 'Your trash is empty'
-                          : isSharedWithMe
-                              ? 'No files have been shared with you yet'
-                              : isShared
-                                  ? 'No files or folders in this shared space'
-                                  : 'No files or folders in Personal yet',
-                )
-              else if (isTrash)
-                ...visible.map(_trashCard)
-              else
-                ...visible.map(_fileCard),
-              if (!_loading && _error == null) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    isTrash
-                        ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in Trash'
-                        : isSharedWithMe
-                            ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} shared with me'
-                            : isShared
-                                ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in ${_selectedSpace?['name'] ?? 'Shared'}'
-                                : '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _p.muted,
-                      fontSize: 10.5,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+        child: Column(
+          children: [
+            // Persistent header: changing tabs only changes action
+            // availability, never its position, size or widget identity.
+            Padding(
+              key: const ValueKey('drive-persistent-header'),
+              padding: const EdgeInsets.fromLTRB(13, 12, 13, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _header(),
+                  const SizedBox(height: 13),
+                  _uploadButton(),
+                  const SizedBox(height: 10),
+                  _quickActions(),
+                  const SizedBox(height: 15),
+                  _searchField(),
+                  const SizedBox(height: 13),
+                  _tabs(),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+            // Only the tab contents refresh/scroll below the stable header.
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _refreshDrive,
+                child: ListView(
+                  key: const ValueKey('drive-tab-content'),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(13, 0, 13, 24),
+                  children: [
+                    if (isTrash) ...[
+                      _trashTop(),
+                      _trashInfo(),
+                      const SizedBox(height: 12),
+                    ],
+                    if (isShared) _sharedControls(),
+                    if (_activeParent != null && !isTrash) _folderPath(),
+                    _fileHeading(),
+                    const SizedBox(height: 7),
+                    if (_loading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    else if (_error != null)
+                      _messagePanel(
+                        Icons.cloud_off_outlined, _error!, retry: true)
+                    else if (visible.isEmpty)
+                      _messagePanel(
+                        Icons.folder_open_outlined,
+                        _query.isNotEmpty
+                            ? 'No files or folders match your search'
+                            : isTrash
+                                ? 'Your trash is empty'
+                                : isSharedWithMe
+                                    ? 'No files have been shared with you yet'
+                                    : isShared
+                                        ? 'No files or folders in this shared space'
+                                        : 'No files or folders in Personal yet',
+                      )
+                    else if (isTrash)
+                      ...visible.map(_trashCard)
+                    else
+                      ...visible.map(_fileCard),
+                    if (!_loading && _error == null) ...[
+                      const SizedBox(height: 12),
+                      Center(
+                        child: Text(
+                          isTrash
+                              ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in Trash'
+                              : isSharedWithMe
+                                  ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} shared with me'
+                                  : isShared
+                                      ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in ${_selectedSpace?['name'] ?? 'Shared'}'
+                                      : '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: _p.muted,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ],
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );

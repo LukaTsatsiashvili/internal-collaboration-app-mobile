@@ -25,6 +25,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   List<_Recipient> _recipients = [];
   Map<String, String> _assignments = {};
   bool _includeDescendants = false;
+  String _permissionMode = 'INHERIT';
   bool _loading = true;
   bool _loaded = false;
   bool _saving = false;
@@ -32,6 +33,10 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
 
   AppPalette get p => Theme.of(context).extension<AppPalette>()!;
   bool get _folder => widget.item['kind'] == 'FOLDER';
+  String get _spaceType => widget.item['space'] is Map
+      ? (widget.item['space']['type'] ?? 'PERSONAL').toString()
+      : 'PERSONAL';
+  bool get _shared => _spaceType != 'PERSONAL';
 
   @override
   void initState() {
@@ -48,27 +53,36 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   Future<void> _load() async {
     if (mounted) setState(() { _loading = true; _error = null; });
     try {
-      // Only the current owner can open item permissions in Personal Drive.
       final results = await Future.wait<dynamic>([
         widget.service.getPeople(),
         widget.service.getDepartments(),
         widget.service.getShares(widget.item['id'].toString()),
+        if (_spaceType == 'GROUP')
+          widget.service.getSpaceMembers(
+            widget.item['spaceId'].toString()),
       ]);
       if (!mounted) return;
       final people = results[0] as List<Map<String, dynamic>>;
       final departments = results[1] as List<Map<String, dynamic>>;
       final shares = results[2] as DriveShares;
+      final groupIds = _spaceType == 'GROUP'
+          ? (results[3] as DriveSpaceMembers).members
+              .map((entry) => entry['userId'].toString()).toSet()
+          : <String>{};
       final recipients = <_Recipient>[];
       for (final user in people) {
         if (user['status'] != 'ACTIVE' ||
-            user['id'] == widget.item['ownerId']) continue;
+            (!_shared && user['id'] == widget.item['ownerId']) ||
+            (_spaceType == 'GROUP' &&
+                !groupIds.contains(user['id'].toString()))) continue;
         recipients.add(_Recipient(
           key: 'u:${user['id']}',
           label: (user['displayName'] ?? user['email'] ?? '').toString(),
-          kind: 'Person',
+          kind: _spaceType == 'GROUP' ? 'Group member' : 'Person',
         ));
       }
-      for (final department in departments) {
+      for (final department in _spaceType == 'GROUP'
+          ? <Map<String, dynamic>>[] : departments) {
         recipients.add(_Recipient(
           key: 'd:${department['id']}',
           label: (department['name'] ?? '').toString(),
@@ -97,6 +111,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
         _assignments = assignments;
         _includeDescendants =
             shares.grants.any((grant) => grant['scope'] == 'DESCENDANTS');
+        _permissionMode = shares.permissionMode;
       });
     } catch (error) {
       if (mounted) {
@@ -117,6 +132,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   void _assign(String key, String? access) {
     setState(() {
       _error = null;
+      if (_shared) _permissionMode = 'CUSTOM';
       if (access == null || access == 'NONE') {
         _assignments.remove(key);
       } else {
@@ -128,6 +144,7 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
   void _bulk(String? access) {
     setState(() {
       _error = null;
+      if (_shared) _permissionMode = 'CUSTOM';
       for (final r in _visible) {
         if (access == null) _assignments.remove(r.key);
         else _assignments[r.key] = access;
@@ -148,13 +165,14 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
           'access': entry.value,
           // Web: Personal folder grants default to ITEM_ONLY, unless
           // the user explicitly opts to share all descendants too.
-          'scope': _folder && _includeDescendants
+          'scope': _folder && (_shared || _includeDescendants)
               ? 'DESCENDANTS' : 'ITEM_ONLY',
         });
       }
       await widget.service.setShares(
         widget.item['id'].toString(),
         grants: grants,
+        permissionMode: _shared ? _permissionMode : null,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (error) {
@@ -309,28 +327,62 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: p.unreadBackground,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: p.cardBorder),
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(Icons.info_outline_rounded,
-                                color: p.link, size: 17),
-                            const SizedBox(width: 9),
-                            Expanded(child: Text(
-                              'Personal items stay private unless you explicitly share them. Folder sharing is item-only by default.',
-                              style: TextStyle(color: p.secondaryText,
-                                  fontSize: 11, height: 1.45),
-                            )),
+                      if (_shared) ...[
+                        Text('Visibility', style: TextStyle(
+                            color: p.secondaryText, fontSize: 11,
+                            fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 7),
+                        AppSelectDropdown<String>(
+                          label: 'Visibility',
+                          value: _permissionMode,
+                          onChanged: _saving ? null : (value) =>
+                              setState(() => _permissionMode = value ?? 'INHERIT'),
+                          items: const [
+                            DropdownMenuItem(value: 'INHERIT',
+                                child: Text('Inherit from this shared space')),
+                            DropdownMenuItem(value: 'CUSTOM',
+                                child: Text('Selected recipients only')),
                           ],
                         ),
-                      ),
-                      if (_folder) ...[
+                        if (_permissionMode == 'CUSTOM') ...[
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: p.unreadBackground,
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: Text(
+                              'Restricted access. Only selected recipients can view this item. Folder grants also apply to current and future contents.',
+                              style: TextStyle(color: p.secondaryText,
+                                  fontSize: 10.5, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ] else ...[
+                        Container(
+                          decoration: BoxDecoration(
+                            color: p.unreadBackground,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: p.cardBorder),
+                          ),
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(Icons.info_outline_rounded,
+                                  color: p.link, size: 17),
+                              const SizedBox(width: 9),
+                              Expanded(child: Text(
+                                'Personal items stay private unless you explicitly share them. Folder sharing is item-only by default.',
+                                style: TextStyle(color: p.secondaryText,
+                                    fontSize: 11, height: 1.45),
+                              )),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (_folder && !_shared) ...[
                         const SizedBox(height: 12),
                         _panel(child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,

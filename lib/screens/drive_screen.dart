@@ -40,6 +40,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   List<Map<String, dynamic>> _items = [];
   String _query = '';
+  String _section = 'personal';
   String? _error;
   bool _loading = true;
   bool _newestFirst = true;
@@ -82,7 +83,12 @@ class _DriveScreenState extends State<DriveScreen> {
       _error = null;
     });
     try {
-      final listing = await _driveService.getPersonalListing(parentId: _activeParent);
+      final listing = _section == 'personal'
+          ? await _driveService.getPersonalListing(parentId: _activeParent)
+          : await _driveService.getDriveView(
+              view: _section,
+              parentId: _section == 'shared-with-me' ? _activeParent : null,
+            );
       if (!mounted || version != _loadVersion) return;
       setState(() {
         _items = listing.items;
@@ -100,7 +106,9 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   DateTime? _updatedAt(Map<String, dynamic> item) {
-    final value = item['updatedAt'] ?? item['createdAt'];
+    final value = _section == 'trash'
+        ? (item['deletedAt'] ?? item['updatedAt'] ?? item['createdAt'])
+        : (item['updatedAt'] ?? item['createdAt']);
     return value == null ? null : DateTime.tryParse(value.toString())?.toLocal();
   }
 
@@ -344,9 +352,35 @@ class _DriveScreenState extends State<DriveScreen> {
 
 
   void _openFolder(String? id) {
-    if (_activeParent == id) return;
+    if (_section == 'trash' || _activeParent == id) return;
     setState(() => _activeParent = id);
     _loadPersonalDrive();
+  }
+
+  void _switchSection(String next) {
+    if (next == 'shared') return; // The Shared tab is a later phase.
+    if (_section == next) return;
+    _searchController.clear();
+    setState(() {
+      _section = next;
+      _activeParent = null;
+      _breadcrumbs = [];
+      _query = '';
+      _newestFirst = true;
+      _items = [];
+      _usedBytes = 0;
+      _error = null;
+    });
+    _loadPersonalDrive();
+  }
+
+  Future<void> _restore(Map<String, dynamic> item) async {
+    if (_section != 'trash' || _busyItemId != null) return;
+    await _runAction(
+      item,
+      'Restored successfully',
+      () => _driveService.restoreItem(item['id'].toString()),
+    );
   }
 
   Future<void> _runAction(
@@ -497,7 +531,9 @@ class _DriveScreenState extends State<DriveScreen> {
   }
 
   Widget _folderPath() {
-    if (_activeParent == null) return const SizedBox.shrink();
+    if (_activeParent == null || _section == 'trash') {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Wrap(
@@ -506,7 +542,8 @@ class _DriveScreenState extends State<DriveScreen> {
         children: [
           TextButton(
             onPressed: () => _openFolder(null),
-            child: const Text('Personal'),
+            child: Text(_section == 'shared-with-me'
+                ? 'Shared with me' : 'Personal'),
           ),
           for (final crumb in _breadcrumbs) ...[
             Icon(Icons.chevron_right_rounded, color: _p.muted, size: 16),
@@ -742,7 +779,9 @@ class _DriveScreenState extends State<DriveScreen> {
           fontWeight: FontWeight.w500,
         ),
         decoration: InputDecoration(
-          hintText: 'Search files and folders',
+          hintText: _section == 'trash'
+              ? 'Search in Trash'
+              : 'Search files and folders',
           hintStyle: TextStyle(
             color: _p.hintText,
             fontSize: 12,

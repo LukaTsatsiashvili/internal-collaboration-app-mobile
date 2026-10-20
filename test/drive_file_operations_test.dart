@@ -60,6 +60,13 @@ Dio mockDio(List<String> requests, List<dynamic> payloads) {
                   ],
           },
         };
+      case 'GET /files/file-1/download':
+        handler.resolve(Response<List<int>>(
+          requestOptions: options,
+          data: [37, 80, 68, 70],
+          statusCode: 200,
+        ));
+        return;
       case 'GET /drive/sheets/item-1':
         result = {'success': true, 'data': {
           'id': 'item-1', 'snapshot': {'sheetOrder':[], 'sheets':{}},
@@ -117,6 +124,16 @@ void main() {
     expect(payloads[1], {'parentId': 'folder-2'});
     expect(() => api.renameItem('item-1', 'Bad/Name'),
         throwsFormatException);
+  });
+
+  test('Downloads original file bytes from authenticated file endpoint',
+      () async {
+    final requests = <String>[];
+    final payloads = <dynamic>[];
+    final service = DriveService(dio: mockDio(requests, payloads));
+    final bytes = await service.downloadFile('file-1');
+    expect(bytes, [37, 80, 68, 70]);
+    expect(requests, ['GET /files/file-1/download']);
   });
 
   test('permission APIs preserve role levels and descendant scope', () async {
@@ -207,12 +224,16 @@ void main() {
     expect(find.text('All Edit/Delete'), findsOneWidget);
     await tester.tap(find.text('All Edit/Delete'));
     await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Save permissions'));
     await tester.pumpAndSettle();
     final sent = payloads.last as Map;
     expect((sent['grants'] as List).length, 2);
     expect((sent['grants'] as List).every((grant) =>
         grant['access'] == 'EDITOR_DELETE'), isTrue);
+    expect((sent['grants'] as List).every((grant) =>
+        grant['scope'] == 'DESCENDANTS'), isTrue);
     expect(tester.takeException(), isNull);
   });
 

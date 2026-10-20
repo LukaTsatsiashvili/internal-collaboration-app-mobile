@@ -61,6 +61,7 @@ class _DriveScreenState extends State<DriveScreen> {
   String _uploadName = '';
   int _usedBytes = 0;
   int _loadVersion = 0;
+  int _spacesVersion = 0;
   String? _activeParent;
   List<Map<String, dynamic>> _breadcrumbs = [];
   String? _busyItemId;
@@ -93,6 +94,7 @@ class _DriveScreenState extends State<DriveScreen> {
   @override
   void dispose() {
     _loadVersion++;
+    _spacesVersion++;
     _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -138,10 +140,11 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Future<void> _loadSharedSpaces({String? selectId}) async {
     if (!mounted) return;
+    final version = ++_spacesVersion;
     setState(() { _loadingSpaces = true; _error = null; });
     try {
       final result = await _driveService.getSpaces();
-      if (!mounted || _section != 'shared') return;
+      if (!mounted || _section != 'shared' || version != _spacesVersion) return;
       final spaces = result.spaces;
       final nextId = selectId ?? _selectedSpaceId;
       final selection = spaces.any((s) => s['id'] == nextId)
@@ -157,7 +160,7 @@ class _DriveScreenState extends State<DriveScreen> {
       });
       await _loadPersonalDrive();
     } catch (error) {
-      if (!mounted || _section != 'shared') return;
+      if (!mounted || _section != 'shared' || version != _spacesVersion) return;
       setState(() {
         _loadingSpaces = false;
         _error = _errorMessage(error);
@@ -175,6 +178,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   void _selectSpace(String id) {
     if (_selectedSpaceId == id) return;
+    _searchDebounce?.cancel();
     _searchController.clear();
     setState(() {
       _selectedSpaceId = id;
@@ -492,6 +496,7 @@ class _DriveScreenState extends State<DriveScreen> {
   void _switchSection(String next) {
     if (_section == next) return;
     _searchDebounce?.cancel();
+    _spacesVersion++;
     _loadVersion++; // Invalidate any response from the previous tab.
     _searchController.clear();
     setState(() {

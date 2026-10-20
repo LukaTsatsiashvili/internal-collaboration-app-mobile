@@ -809,6 +809,7 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Widget _tabs() {
     const labels = ['Personal', 'Shared', 'Shared with me', 'Trash'];
+    const keys = ['personal', 'shared', 'shared-with-me', 'trash'];
     return Container(
       height: 39,
       padding: const EdgeInsets.all(3),
@@ -822,33 +823,41 @@ class _DriveScreenState extends State<DriveScreen> {
           for (var i = 0; i < labels.length; i++)
             Expanded(
               child: Tooltip(
-                message: i == 0
-                    ? 'Personal Drive'
-                    : 'This tab will be designed in a later step',
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: i == 0
-                      ? BoxDecoration(
-                          color: _p.card,
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _p.cardShadow,
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        )
-                      : null,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      labels[i],
-                      style: TextStyle(
-                        color: i == 0 ? _p.link : _p.muted,
-                        fontWeight:
-                            i == 0 ? FontWeight.w700 : FontWeight.w600,
-                        fontSize: 10.5,
+                message: i == 1
+                    ? 'This tab will be added in a later step'
+                    : 'Open ${labels[i]}',
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    key: ValueKey('drive-tab-${keys[i]}'),
+                    borderRadius: BorderRadius.circular(14),
+                    onTap: i == 1 ? null : () => _switchSection(keys[i]),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: keys[i] == _section
+                          ? BoxDecoration(
+                              color: _p.card,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _p.cardShadow,
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            )
+                          : null,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          labels[i],
+                          style: TextStyle(
+                            color: keys[i] == _section ? _p.link : _p.muted,
+                            fontWeight: keys[i] == _section
+                                ? FontWeight.w700 : FontWeight.w600,
+                            fontSize: 10.5,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -1074,15 +1083,17 @@ class _DriveScreenState extends State<DriveScreen> {
                   loading: _downloadingItemId == item['id'],
                   completed: _downloadedItemId == item['id'],
                 ),
-              _cardAction(Icons.edit_outlined, 'Rename',
-                  canEdit && !busy ? () => _rename(item) : null),
-              _cardAction(Icons.share_outlined, 'Permissions',
-                  canManage && !busy ? () => _permissions(item) : null),
-              _cardAction(Icons.drive_file_move_outline, 'Move',
-                  canMove && !busy ? () => _move(item) : null),
-              _cardAction(Icons.delete_outline_rounded, 'Delete',
-                  canDelete && !busy ? () => _delete(item) : null,
-                  destructive: true),
+              if (_section == 'personal') ...[
+                _cardAction(Icons.edit_outlined, 'Rename',
+                    canEdit && !busy ? () => _rename(item) : null),
+                _cardAction(Icons.share_outlined, 'Permissions',
+                    canManage && !busy ? () => _permissions(item) : null),
+                _cardAction(Icons.drive_file_move_outline, 'Move',
+                    canMove && !busy ? () => _move(item) : null),
+                _cardAction(Icons.delete_outline_rounded, 'Delete',
+                    canDelete && !busy ? () => _delete(item) : null,
+                    destructive: true),
+              ],
             ],
           ),
           if (bytes != null && bytes > 0)

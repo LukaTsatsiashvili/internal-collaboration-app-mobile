@@ -9,14 +9,9 @@ class ApiClient {
   static const String baseUrl = 'https://collaboration.gtexshop.ge/api/v1'; 
 
   ApiClient() {
-    dio = Dio(
-      BaseOptions(
-        baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
-        headers: {'Content-Type': 'application/json'},
-      ),
-    );
+    // Dio sets application/json for Map bodies and multipart for FormData.
+    // Do not force JSON on bodyless requests (notably DELETE /drive/:id).
+    dio = Dio(defaultOptions());
 
     // Interceptor - ავტომატურად ამატებს ტოკენტს და მართავს შეცდომებს
     dio.interceptors.add(
@@ -59,6 +54,14 @@ class ApiClient {
     );
     options.contentType = null;
   }
+
+  /// Match the Web client: Content-Type is selected from the request body.
+  /// Keeping this separate also lets regression tests assert the defaults.
+  static BaseOptions defaultOptions() => BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 10),
+      );
 
   // ტოკენის განახლების მექანიზმი HttpOnly cookie-ს გამოყენებით
   Future<bool> _refreshToken() async {

@@ -413,29 +413,23 @@ class _DrivePermissionsDialogState extends State<DrivePermissionsDialog> {
                 children: [
                   TextButton(
                     onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        color: p.secondaryText,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 6),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [
-                        AppColors.gradientStart, AppColors.gradientEnd,
-                      ]),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: ElevatedButton(
+                  SizedBox(
+                    width: 158,
+                    child: AppModalPrimaryButton(
+                      label: 'Save permissions',
+                      busy: _saving,
                       onPressed: _saving || _loading || !_loaded
                           ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        shadowColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _saving
-                          ? const SizedBox(width: 18, height: 18,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
-                          : const Text('Save permissions'),
                     ),
                   ),
                 ],

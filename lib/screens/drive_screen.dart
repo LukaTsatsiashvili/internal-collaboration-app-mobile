@@ -663,7 +663,7 @@ class _DriveScreenState extends State<DriveScreen> {
                 const SizedBox(height: 12),
                 Center(
                   child: Text(
-                    '${visible.length} items · ${_sizeLabel(_usedBytes)} in Personal',
+                    '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _p.muted,

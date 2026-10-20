@@ -256,17 +256,17 @@ Map<String, dynamic> _serializeCell(Data cell) {
 Object? _plainValue(CellValue? value, Data cell) {
   return switch (value) {
     null => null,
-    IntCellValue(:final value) => value,
-    DoubleCellValue(:final value) => value.isFinite ? value : null,
-    BoolCellValue(:final value) => value,
-    TextCellValue() => cell.displayText,
-    DateCellValue() => _excelDateSerial(value.asDateTimeUtc()),
-    DateTimeCellValue() => _excelDateSerial(value.asDateTimeUtc()),
-    TimeCellValue() =>
-      (value.hour * 3600 + value.minute * 60 + value.second +
-              value.millisecond / 1000 + value.microsecond / 1000000) /
+    IntCellValue v => v.value,
+    DoubleCellValue v => v.value.isFinite ? v.value : null,
+    BoolCellValue v => v.value,
+    TextCellValue _ => cell.displayText,
+    DateCellValue v => _excelDateSerial(v.asDateTimeUtc()),
+    DateTimeCellValue v => _excelDateSerial(v.asDateTimeUtc()),
+    TimeCellValue v =>
+      (v.hour * 3600 + v.minute * 60 + v.second +
+              v.millisecond / 1000 + v.microsecond / 1000000) /
           86400,
-    FormulaCellValue() => null,
+    FormulaCellValue _ => null,
   };
 }
 

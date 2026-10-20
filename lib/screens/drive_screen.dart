@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:file_selector/file_selector.dart';
@@ -15,9 +17,11 @@ import 'task_group_dialog.dart';
 /// Visual-first Personal Drive, styled with the same semantic palette and
 /// search field as Messages. All listed data comes from the real Drive API.
 class DriveScreen extends StatefulWidget {
-  const DriveScreen({super.key, this.service});
+  const DriveScreen({super.key, this.service, this.downloadSaver});
 
   final DriveService? service;
+  /// Optional injection for UI tests; production saves using Android MediaStore.
+  final Future<DriveDownloadResult> Function(Uint8List, String)? downloadSaver;
 
   @override
   State<DriveScreen> createState() => _DriveScreenState();
@@ -366,7 +370,10 @@ class _DriveScreenState extends State<DriveScreen> {
           ? '${baseName.replaceFirst(RegExp(r'\.(xlsx|xlsm|xls)$',
               caseSensitive: false), '')}.xlsx'
           : baseName;
-      final saved = await DriveDownload.saveAndOpen(bytes, filename);
+      final saved = await (widget.downloadSaver ?? DriveDownload.saveAndOpen)(
+        bytes,
+        filename,
+      );
       if (!mounted) return;
       if (saved.saved) {
         setState(() => _downloadedItemId = id);

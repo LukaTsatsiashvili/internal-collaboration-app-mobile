@@ -18,7 +18,13 @@ class SpreadsheetScreen extends StatefulWidget {
 }
 
 class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
-  static const _origin = 'https://collaboration.gtexshop.ge';
+  // Must match the origin serving the WebView's spreadsheet editor.
+  // Use --dart-define=COLLAB_ORIGIN=https://collaboration-dev.gtexshop.ge
+  // for isolated staging; production remains the default.
+  static const _origin = String.fromEnvironment(
+    'COLLAB_ORIGIN',
+    defaultValue: 'https://collaboration.gtexshop.ge',
+  );
   static const _storage = FlutterSecureStorage();
 
   late final WebViewController _webView;
@@ -42,8 +48,10 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           // HTTPS domain; prevent top-level navigation to untrusted sites.
           if (!request.isMainFrame) return NavigationDecision.navigate;
           final uri = Uri.tryParse(request.url);
+          final allowedOrigin = Uri.tryParse(_origin);
           if (uri?.scheme == 'https' &&
-              uri?.host == 'collaboration.gtexshop.ge' &&
+              uri?.host == allowedOrigin?.host &&
+              uri?.port == allowedOrigin?.port &&
               uri!.path.startsWith('/mobile/sheets/')) {
             return NavigationDecision.navigate;
           }

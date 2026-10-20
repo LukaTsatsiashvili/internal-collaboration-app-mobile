@@ -368,7 +368,7 @@ class _DriveScreenState extends State<DriveScreen> {
         maxNameLength: 200,
         validateName: (text) {
           if (text == '.' || text == '..' ||
-              RegExp(r'[\\x00-\\x1f/\\\\]').hasMatch(text)) {
+              RegExp(r'[\x00-\x1f/\\]').hasMatch(text)) {
             return 'Choose a name without slashes or control characters';
           }
           return null;

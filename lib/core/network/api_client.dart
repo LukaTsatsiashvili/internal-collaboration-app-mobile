@@ -77,13 +77,29 @@ class ApiClient {
   }
 
   Future<Response<dynamic>> _retry(RequestOptions requestOptions) async {
+    // A multipart stream can be sent once. On token refresh clone the form
+    // before retrying, otherwise Dio throws "Cannot finalize" after 401.
+    final originalData = requestOptions.data;
+    final retryData = originalData is FormData
+        ? originalData.clone()
+        : originalData;
+    final headers = Map<String, dynamic>.from(requestOptions.headers);
+    if (retryData is FormData) {
+      // The cloned form has its own multipart boundary.
+      headers.removeWhere(
+        (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
+      );
+    }
     final options = Options(
       method: requestOptions.method,
-      headers: requestOptions.headers,
+      headers: headers,
+      sendTimeout: requestOptions.sendTimeout,
+      receiveTimeout: requestOptions.receiveTimeout,
+      responseType: requestOptions.responseType,
     );
     return dio.request<dynamic>(
       requestOptions.path,
-      data: requestOptions.data,
+      data: retryData,
       queryParameters: requestOptions.queryParameters,
       options: options,
     );

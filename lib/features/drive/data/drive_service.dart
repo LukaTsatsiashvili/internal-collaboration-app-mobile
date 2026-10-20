@@ -133,6 +133,106 @@ class DriveService {
     }
   }
 
+  /// Spaces and permissions for the Shared tab (Web: GET /drive/spaces).
+  Future<DriveSpaces> getSpaces() async {
+    try {
+      final response = await _dio.get('/drive/spaces');
+      final body = response.data;
+      if (body is! Map || body['success'] != true || body['data'] is! List) {
+        throw StateError('Could not read shared spaces');
+      }
+      final meta = body['meta'];
+      return DriveSpaces(
+        spaces: (body['data'] as List).whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m)).toList(),
+        canCreateGroups: meta is Map && meta['canCreateGroups'] == true,
+        canManageGlobal: meta is Map && meta['canManageGlobal'] == true,
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Could not load shared spaces'));
+    }
+  }
+
+  /// The Web Shared list uses spaceId without the shared-with-me view.
+  Future<PersonalDriveListing> getSharedListing({
+    required String spaceId,
+    String? parentId,
+  }) async {
+    try {
+      final response = await _dio.get('/drive', queryParameters: {
+        'spaceId': spaceId,
+        if (parentId != null) 'parentId': parentId,
+      });
+      final body = response.data;
+      if (body is! Map || body['success'] != true || body['data'] is! List) {
+        throw StateError('Could not read shared folder');
+      }
+      final meta = body['meta'];
+      return PersonalDriveListing(
+        items: (body['data'] as List).whereType<Map>()
+            .map((m) => Map<String, dynamic>.from(m)).toList(),
+        usedBytes: meta is Map && meta['usedBytes'] is num
+            ? (meta['usedBytes'] as num).toInt() : 0,
+        breadcrumbs: meta is Map && meta['breadcrumbs'] is List
+            ? (meta['breadcrumbs'] as List).whereType<Map>()
+                .map((m) => Map<String, dynamic>.from(m)).toList()
+            : const [],
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Could not load shared folder'));
+    }
+  }
+
+  Future<Map<String, dynamic>> createSharedGroup(String name) async {
+    _checkName(name);
+    try {
+      final response = await _dio.post('/drive/spaces',
+          data: {'name': name.trim()});
+      final body = response.data;
+      if (body is Map && body['success'] == true && body['data'] is Map) {
+        return Map<String, dynamic>.from(body['data']);
+      }
+      throw StateError('Could not create shared group');
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Could not create shared group'));
+    }
+  }
+
+  Future<DriveSpaceMembers> getSpaceMembers(String spaceId) async {
+    try {
+      final response = await _dio.get(
+        '/drive/spaces/${Uri.encodeComponent(spaceId)}/members',
+      );
+      final body = response.data;
+      if (body is Map && body['success'] == true && body['data'] is List) {
+        final meta = body['meta'];
+        return DriveSpaceMembers(
+          members: (body['data'] as List).whereType<Map>()
+              .map((m) => Map<String, dynamic>.from(m)).toList(),
+          type: meta is Map ? (meta['type'] ?? '').toString() : '',
+          name: meta is Map ? (meta['name'] ?? '').toString() : '',
+        );
+      }
+      throw StateError('Could not load space members');
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Could not load space members'));
+    }
+  }
+
+  Future<void> saveSpaceMembers(
+    String spaceId, List<Map<String, dynamic>> members,
+  ) async {
+    try {
+      final response = await _dio.put(
+        '/drive/spaces/${Uri.encodeComponent(spaceId)}/members',
+        data: {'members': members},
+      );
+      _requireSuccess(response, 'Could not save space members');
+    } on DioException catch (e) {
+      throw Exception(_serverError(e, 'Could not save space members'));
+    }
+  }
+
   /// Backwards-compatible list accessor used by older Drive UI callers.
   Future<List<dynamic>> getDriveItems({String? folderId}) async {
     return (await getPersonalListing(parentId: folderId)).items;
@@ -141,7 +241,7 @@ class DriveService {
 
   /// Creates a real Personal Drive folder. Without fileId, /drive creates
   /// kind=FOLDER. This is the same endpoint used by the web interface.
-  Future<Map<String, dynamic>> createFolder(String name, {String? parentId}) async {
+  Future<Map<String, dynamic>> createFolder(String name, {String? parentId, String? spaceId}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty ||
         trimmed.length > 200 ||
@@ -154,7 +254,8 @@ class DriveService {
     try {
       final response = await _dio.post(
         '/drive',
-        data: {'name': trimmed, 'parentId': parentId},
+        data: {'name': trimmed, 'parentId': parentId,
+          if (spaceId != null) 'spaceId': spaceId},
       );
       final data = response.data;
       if (data is Map && data['success'] == true &&
@@ -174,6 +275,7 @@ class DriveService {
     Uint8List bytes, {
     required String filename,
     String? parentId,
+    String? spaceId,
   }) async {
     final name = ExcelToUniver.spreadsheetName(filename);
     final snapshot = await ExcelToUniver.convert(bytes, name: name);
@@ -182,7 +284,8 @@ class DriveService {
     try {
       final created = await _dio.post(
         '/drive/sheets',
-        data: {'name': name, 'parentId': parentId},
+        data: {'name': name, 'parentId': parentId,
+          if (spaceId != null) 'spaceId': spaceId},
       );
       final createdBody = created.data;
       if (createdBody is! Map ||
@@ -391,6 +494,7 @@ class DriveService {
   Future<Map<String, dynamic>> uploadDriveFile(
     XFile file, {
     String? parentId,
+    String? spaceId,
     void Function(int sent, int total)? onProgress,
   }) async {
     final name = file.name;
@@ -447,6 +551,7 @@ class DriveService {
           'name': name,
           'fileId': uploadedFileId,
           'parentId': parentId,
+          if (spaceId != null) 'spaceId': spaceId,
         },
       );
       _requireSuccess(createResponse, 'Could not add the file to Drive');
@@ -500,4 +605,26 @@ class DriveShares {
   const DriveShares({required this.grants, required this.permissionMode});
   final List<Map<String, dynamic>> grants;
   final String permissionMode;
+}
+
+class DriveSpaces {
+  const DriveSpaces({
+    required this.spaces,
+    required this.canCreateGroups,
+    required this.canManageGlobal,
+  });
+  final List<Map<String, dynamic>> spaces;
+  final bool canCreateGroups;
+  final bool canManageGlobal;
+}
+
+class DriveSpaceMembers {
+  const DriveSpaceMembers({
+    required this.members,
+    required this.type,
+    required this.name,
+  });
+  final List<Map<String, dynamic>> members;
+  final String type;
+  final String name;
 }

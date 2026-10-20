@@ -182,14 +182,20 @@ class DriveService {
     }
   }
 
+  /// Move a Drive item to Trash, matching Web's bodyless DELETE request.
+  /// Both files and folders use their DriveItem ID (never FileObject ID).
   Future<void> trashItem(String itemId) async {
     try {
-      final response = await _dio.delete(
+      final response = await _dio.delete<dynamic>(
         '/drive/${Uri.encodeComponent(itemId)}',
       );
       _requireSuccess(response, 'Could not move item to Trash');
     } on DioException catch (error) {
-      throw Exception(_serverError(error, 'Could not move item to Trash'));
+      final message = _serverError(error, 'Could not move item to Trash');
+      // When a proxy returns plain text/HTML rather than the JSON API error,
+      // retain the HTTP status for troubleshooting instead of a vague toast.
+      final status = error.response?.statusCode;
+      throw Exception(status == null ? message : '$message (HTTP $status)');
     }
   }
 

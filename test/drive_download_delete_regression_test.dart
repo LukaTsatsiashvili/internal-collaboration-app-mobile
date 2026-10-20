@@ -34,6 +34,23 @@ void main() {
     );
   });
 
+  test('JSON payloads still use application/json when present', () async {
+    final dio = Dio(ApiClient.defaultOptions());
+    late RequestOptions captured;
+    dio.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
+      captured = options;
+      handler.resolve(Response(
+        requestOptions: options,
+        statusCode: 201,
+        data: {'success': true},
+      ));
+    }));
+
+    await dio.post('/drive', data: {'name': 'Reports'});
+    expect(captured.data, {'name': 'Reports'});
+    expect(captured.contentType, Headers.jsonContentType);
+  });
+
   test('Files and folders both delete by Drive item ID, not file ID',
       () async {
     final ids = <String>[];

@@ -1113,6 +1113,205 @@ class _DriveScreenState extends State<DriveScreen> {
     );
   }
 
+  Widget _trashTop() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Tooltip(
+          message: 'Empty Trash will be available in a future update',
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              key: const ValueKey('drive-empty-trash'),
+              onPressed: null, // Intentionally visual-only in this phase.
+              icon: const Icon(Icons.delete_sweep_outlined, size: 19),
+              label: const Text(
+                'Empty Trash',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                disabledBackgroundColor:
+                    const Color(0xFFF53861).withValues(alpha: 0.8),
+                disabledForegroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _trashInfo() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+      decoration: BoxDecoration(
+        color: _p.unreadBackground,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _p.cardBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline_rounded, color: _p.link, size: 17),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              'Items in Trash are permanently deleted after 30 days.',
+              style: TextStyle(
+                color: _p.secondaryText,
+                fontWeight: FontWeight.w500,
+                fontSize: 10.5,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _trashCard(Map<String, dynamic> item) {
+    final folder = _isFolder(item);
+    final sheet = _isSheet(item);
+    final ownerName = _ownerName(item);
+    final tint = folder
+        ? const Color(0xFF8A6DFA)
+        : sheet
+            ? const Color(0xFF15AF8D)
+            : AppColors.primary;
+    final icon = folder
+        ? Icons.folder_outlined
+        : sheet
+            ? Icons.table_chart_outlined
+            : Icons.insert_drive_file_outlined;
+    final busy = _busyItemId != null;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(13, 13, 12, 8),
+      decoration: BoxDecoration(
+        color: _p.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _p.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: _p.cardShadow,
+            blurRadius: 16,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 45,
+                width: 45,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tint.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: tint, size: 24),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (item['name'] ?? '').toString(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: _p.ink,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
+                      ),
+                    ),
+                    if (ownerName.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        '$ownerName · owner',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _p.muted,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 7),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _p.panel,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  sheet ? 'XLSX' : _typeLabel(item),
+                  style: TextStyle(
+                    color: _p.secondaryText,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Divider(color: _p.cardBorder, thickness: 1, height: 1),
+          const SizedBox(height: 3),
+          Row(
+            children: [
+              Icon(Icons.schedule_outlined, color: _p.muted, size: 13),
+              const SizedBox(width: 5),
+              Expanded(
+                child: Text(
+                  _dateLabel(item),
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: _p.muted,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+              _cardAction(
+                Icons.restore_rounded,
+                'Restore',
+                busy ? null : () => _restore(item),
+                loading: _busyItemId == item['id'],
+              ),
+              Tooltip(
+                message: 'Permanent deletion is not available yet',
+                child: IconButton(
+                  key: const ValueKey('drive-permanent-delete'),
+                  onPressed: null,
+                  tooltip: 'Permanently delete (coming soon)',
+                  iconSize: 17,
+                  constraints:
+                      const BoxConstraints(minWidth: 30, minHeight: 34),
+                  padding: EdgeInsets.zero,
+                  icon: Icon(Icons.delete_outline_rounded, color: _p.muted),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _messagePanel(IconData icon, String message, {bool retry = false}) {
     return Container(
       width: double.infinity,
@@ -1140,6 +1339,9 @@ class _DriveScreenState extends State<DriveScreen> {
   @override
   Widget build(BuildContext context) {
     final visible = _visibleItems;
+    final isPersonal = _section == 'personal';
+    final isTrash = _section == 'trash';
+    final isSharedWithMe = _section == 'shared-with-me';
 
     return Scaffold(
       backgroundColor: _p.page,
@@ -1152,15 +1354,22 @@ class _DriveScreenState extends State<DriveScreen> {
             children: [
               _header(),
               const SizedBox(height: 13),
-              _uploadButton(),
-              const SizedBox(height: 10),
-              _quickActions(),
-              const SizedBox(height: 15),
+              if (isPersonal) ...[
+                _uploadButton(),
+                const SizedBox(height: 10),
+                _quickActions(),
+                const SizedBox(height: 15),
+              ],
+              if (isTrash) _trashTop(),
               _searchField(),
               const SizedBox(height: 13),
               _tabs(),
               const SizedBox(height: 12),
-              _folderPath(),
+              if (isTrash) ...[
+                _trashInfo(),
+                const SizedBox(height: 12),
+              ],
+              if (_activeParent != null && !isTrash) _folderPath(),
               _fileHeading(),
               const SizedBox(height: 7),
               if (_loading)
@@ -1173,17 +1382,27 @@ class _DriveScreenState extends State<DriveScreen> {
               else if (visible.isEmpty)
                 _messagePanel(
                   Icons.folder_open_outlined,
-                  _query.isEmpty
-                      ? 'No files or folders in Personal yet'
-                      : 'No files or folders match your search',
+                  _query.isNotEmpty
+                      ? 'No files or folders match your search'
+                      : isTrash
+                          ? 'Your trash is empty'
+                          : isSharedWithMe
+                              ? 'No files have been shared with you yet'
+                              : 'No files or folders in Personal yet',
                 )
+              else if (isTrash)
+                ...visible.map(_trashCard)
               else
                 ...visible.map(_fileCard),
               if (!_loading && _error == null) ...[
                 const SizedBox(height: 12),
                 Center(
                   child: Text(
-                    '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
+                    isTrash
+                        ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} in Trash'
+                        : isSharedWithMe
+                            ? '${visible.length} ${visible.length == 1 ? 'item' : 'items'} shared with me'
+                            : '${visible.length} ${visible.length == 1 ? 'item' : 'items'} · ${_sizeLabel(_usedBytes)} in Personal',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: _p.muted,
@@ -1199,4 +1418,5 @@ class _DriveScreenState extends State<DriveScreen> {
       ),
     );
   }
+
 }

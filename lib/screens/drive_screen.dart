@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:open_filex/open_filex.dart';
 import 'package:file_selector/file_selector.dart';
 
 import '../core/theme/app_colors.dart';
@@ -40,6 +39,8 @@ class _DriveScreenState extends State<DriveScreen> {
   String? _activeParent;
   List<Map<String, dynamic>> _breadcrumbs = [];
   String? _busyItemId;
+  String? _downloadingItemId;
+  String? _downloadedItemId;
 
   AppPalette get _p => Theme.of(context).extension<AppPalette>()!;
 
@@ -346,35 +347,51 @@ class _DriveScreenState extends State<DriveScreen> {
 
   Future<void> _download(Map<String, dynamic> item) async {
     if (_busyItemId != null || _isFolder(item)) return;
-    setState(() => _busyItemId = item['id'].toString());
+    final id = item['id'].toString();
+    setState(() {
+      _busyItemId = id;
+      _downloadingItemId = id;
+      _downloadedItemId = null;
+    });
     try {
       final file = _file(item);
       final sheet = _isSheet(item);
       final bytes = sheet
           ? await compute(UniverExcelExport.export,
-              (await _driveService.getSpreadsheet(
-                  item['id'].toString()))['snapshot'] as Map<String, dynamic>)
+              (await _driveService.getSpreadsheet(id))['snapshot']
+                  as Map<String, dynamic>)
           : await _driveService.downloadFile(file['id'].toString());
       final baseName = (item['name'] ?? 'download').toString();
       final filename = sheet
           ? '${baseName.replaceFirst(RegExp(r'\.(xlsx|xlsm|xls)$',
               caseSensitive: false), '')}.xlsx'
           : baseName;
-      final saved = await DriveDownload.save(bytes, filename);
+      final saved = await DriveDownload.saveAndOpen(bytes, filename);
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(
-          content: Text('Saved: ${saved.path}'),
-          action: SnackBarAction(
-            label: 'Open',
-            onPressed: () { OpenFilex.open(saved.path); },
-          ),
-        ));
+      if (saved.saved) {
+        setState(() => _downloadedItemId = id);
+        // The card itself shows success; don't display a filesystem path.
+        Future<void>.delayed(const Duration(seconds: 3), () {
+          if (mounted && _downloadedItemId == id) {
+            setState(() => _downloadedItemId = null);
+          }
+        });
+        if (!saved.opened) {
+          _feedback(
+            'File downloaded, but no compatible app was found to open it.',
+          );
+        }
+      }
+      // A cancelled legacy Android system picker is not a successful save.
     } catch (error) {
       _feedback(_errorMessage(error), error: true);
     } finally {
-      if (mounted) setState(() => _busyItemId = null);
+      if (mounted) {
+        setState(() {
+          _busyItemId = null;
+          _downloadingItemId = null;
+        });
+      }
     }
   }
 
@@ -700,6 +717,8 @@ class _DriveScreenState extends State<DriveScreen> {
     String label,
     VoidCallback? onPressed, {
     bool destructive = false,
+    bool loading = false,
+    bool completed = false,
   }) {
     return IconButton(
       key: ValueKey('drive-action-$label'),
@@ -708,9 +727,18 @@ class _DriveScreenState extends State<DriveScreen> {
       constraints: const BoxConstraints(minWidth: 30, minHeight: 34),
       padding: EdgeInsets.zero,
       iconSize: 17,
-      color: destructive ? Theme.of(context).colorScheme.error
-          : _p.previewText,
-      icon: Icon(icon),
+      color: completed
+          ? const Color(0xFF16B48D)
+          : destructive
+              ? Theme.of(context).colorScheme.error
+              : _p.previewText,
+      icon: loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(completed ? Icons.check_circle_rounded : icon),
     );
   }
 
@@ -846,8 +874,13 @@ class _DriveScreenState extends State<DriveScreen> {
               ),
               const Spacer(),
               if (!folder)
-                _cardAction(Icons.download_outlined, 'Download',
-                    busy ? null : () => _download(item)),
+                _cardAction(
+                  Icons.download_outlined,
+                  'Download',
+                  busy ? null : () => _download(item),
+                  loading: _downloadingItemId == item['id'],
+                  completed: _downloadedItemId == item['id'],
+                ),
               _cardAction(Icons.edit_outlined, 'Rename',
                   canEdit && !busy ? () => _rename(item) : null),
               _cardAction(Icons.share_outlined, 'Permissions',

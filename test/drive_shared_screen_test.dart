@@ -139,7 +139,24 @@ void main() {
     await _load(tester, fake, dark: true);
 
     expect(fake.calls, containsAll(['spaces', 'listing:global-id:null']));
-    expect(find.text('Company-wide shared space'), findsOneWidget);
+    // Shared uses the same top-of-page layout as Personal:
+    // Upload -> Quick Actions -> Search -> Tabs -> space contents.
+    final upload = find.text('Upload files');
+    final excelAction = find.text('Import Excel');
+    final search = find.byType(TextField).first;
+    final tabs = find.byKey(const ValueKey('drive-tab-shared'));
+    final global = find.text('Company-wide shared space');
+    expect(upload, findsOneWidget);
+    expect(excelAction, findsOneWidget);
+    expect(tester.getRect(upload).bottom,
+        lessThan(tester.getRect(excelAction).top));
+    expect(tester.getRect(excelAction).bottom,
+        lessThan(tester.getRect(search).top));
+    expect(tester.getRect(search).bottom,
+        lessThan(tester.getRect(tabs).top));
+    expect(tester.getRect(tabs).bottom,
+        lessThan(tester.getRect(global).top));
+    expect(global, findsOneWidget);
     expect(find.text('FILES & FOLDERS'), findsOneWidget);
     expect(find.text('Financials.pdf'), findsOneWidget);
 

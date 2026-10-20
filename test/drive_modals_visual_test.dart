@@ -136,6 +136,61 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('Bulk permissions highlight only when all visible grants agree',
+      (tester) async {
+    final service = _VisualDriveService();
+    await _openDialog(
+      tester,
+      service: service,
+      dark: true,
+      build: (service) =>
+          DrivePermissionsDialog(item: _item(folder: true), service: service),
+    );
+
+    BorderSide? borderFor(String access) {
+      final button = tester.widget<OutlinedButton>(
+        find.byKey(ValueKey('drive-bulk-$access')),
+      );
+      return button.style?.side?.resolve(<WidgetState>{});
+    }
+
+    // Initially Luka is Viewer and Nino has No Access: mixed selections.
+    expect(borderFor('VIEWER')!.width, 1);
+    expect(borderFor('NONE')!.width, 1);
+
+    await tester.tap(find.text('All Viewer'));
+    await tester.pumpAndSettle();
+    expect(borderFor('VIEWER')!.width, 1.5);
+    expect(borderFor('EDITOR')!.width, 1);
+
+    // Changing one user's dropdown clears the bulk indicator.
+    await tester.tap(find.byTooltip('Permission for Nino'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editor').last);
+    await tester.pumpAndSettle();
+    expect(borderFor('VIEWER')!.width, 1);
+    expect(borderFor('EDITOR')!.width, 1);
+
+    await tester.tap(find.text('All Editor'));
+    await tester.pumpAndSettle();
+    expect(borderFor('EDITOR')!.width, 1.5);
+
+    await tester.tap(find.text('All Edit/Delete'));
+    await tester.pumpAndSettle();
+    expect(borderFor('EDITOR_DELETE')!.width, 1.5);
+
+    await tester.tap(find.text('Deselect all'));
+    await tester.pumpAndSettle();
+    expect(borderFor('NONE')!.width, 1.5);
+    expect(service.savedGrants, isEmpty);
+
+    // The current permissions are still unsaved until Save permissions.
+    await tester.tap(find.text('Save permissions'));
+    await tester.pumpAndSettle();
+    expect(service.savedGrants, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Move buttons align and folder contents are vertically centered',
       (tester) async {
     final service = _VisualDriveService();

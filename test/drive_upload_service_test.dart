@@ -73,6 +73,9 @@ void main() {
     expect(multipart.files.single.value.length, 4);
     expect(multipart.files.single.value.contentType.toString(),
         'application/pdf');
+    // Verify the actual stream, not just metadata or the requested filename.
+    final pieces = await multipart.files.single.value.finalize().toList();
+    expect(pieces.expand((part) => part).toList(), [37, 80, 68, 70]);
     expect(payloads.last, {
       'name': 'Report.pdf',
       'fileId': 'file-object-1',

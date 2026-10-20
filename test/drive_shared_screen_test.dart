@@ -158,6 +158,8 @@ void main() {
         lessThan(tester.getRect(global).top));
     expect(global, findsOneWidget);
     expect(find.text('FILES & FOLDERS'), findsOneWidget);
+    // The top controls are now pinned, so files scroll independently.
+    await tester.ensureVisible(find.text('Financials.pdf'));
     expect(find.text('Financials.pdf'), findsOneWidget);
 
     final groupChip = find.byKey(const ValueKey('shared-space-shops-id'));
@@ -167,6 +169,7 @@ void main() {
     expect(tester.getRect(membersButton).top,
         greaterThan(tester.getRect(groupChip).bottom));
 
+    await tester.ensureVisible(groupChip);
     await tester.tap(groupChip);
     await tester.pumpAndSettle();
     expect(fake.calls.last, 'listing:shops-id:null');

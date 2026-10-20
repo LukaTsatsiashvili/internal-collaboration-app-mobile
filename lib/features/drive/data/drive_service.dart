@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:file_selector/file_selector.dart';
 import '../../../core/network/api_client.dart';
 import 'excel_to_univer.dart';
 
@@ -315,6 +316,99 @@ class DriveService {
       return issue['message'].toString();
     }
     return fallback;
+  }
+
+  /// The Web flow is intentionally two-stage:
+  /// 1) POST /files multipart field "file" -> uploaded FileObject ID;
+  /// 2) POST /drive with { name, fileId, parentId } -> visible DriveItem.
+  ///
+  /// Stream the selected XFile (also works with Android content pickers),
+  /// rather than assuming its path is a readable local filesystem path.
+  Future<Map<String, dynamic>> uploadDriveFile(
+    XFile file, {
+    String? parentId,
+    void Function(int sent, int total)? onProgress,
+  }) async {
+    final name = file.name;
+    _checkName(name);
+
+    final size = await file.length();
+    if (size <= 0) {
+      throw const FormatException('The selected file is empty');
+    }
+
+    // Preserve the original MIME type whenever the operating system provides
+    // one. The server stores part.mimetype as the file's Content-Type.
+    DioMediaType? mimeType;
+    final providedMime = file.mimeType;
+    if (providedMime != null && providedMime.contains('/')) {
+      try {
+        mimeType = DioMediaType.parse(providedMime);
+      } on FormatException {
+        // Unsupported MIME strings are treated as application/octet-stream.
+      }
+    }
+
+    String? uploadedFileId;
+    try {
+      final form = FormData.fromMap({
+        'file': MultipartFile.fromStream(
+          () => file.openRead(),
+          size,
+          filename: name,
+          contentType: mimeType,
+        ),
+      });
+      final uploadResponse = await _dio.post<dynamic>(
+        '/files',
+        data: form,
+        options: Options(
+          sendTimeout: const Duration(minutes: 5),
+          receiveTimeout: const Duration(minutes: 5),
+        ),
+        onSendProgress: onProgress,
+      );
+      _requireSuccess(uploadResponse, 'The server did not upload the file');
+      final uploadData = (uploadResponse.data as Map)['data'];
+      if (uploadData is! Map ||
+          uploadData['id'] is! String ||
+          (uploadData['id'] as String).isEmpty) {
+        throw StateError('Upload did not return a file ID');
+      }
+      uploadedFileId = uploadData['id'] as String;
+
+      final createResponse = await _dio.post<dynamic>(
+        '/drive',
+        data: {
+          'name': name,
+          'fileId': uploadedFileId,
+          'parentId': parentId,
+        },
+      );
+      _requireSuccess(createResponse, 'Could not add the file to Drive');
+      final created = (createResponse.data as Map)['data'];
+      if (created is! Map || created['kind'] != 'FILE') {
+        throw StateError('Drive did not confirm file creation');
+      }
+      return Map<String, dynamic>.from(created);
+    } catch (error) {
+      // If the binary upload worked but linking it failed, don't leave an
+      // unlinked FileObject consuming the user's storage quota. This delete
+      // is only permitted for own, unlinked uploads.
+      if (uploadedFileId != null) {
+        try {
+          await _dio.delete('/files/$uploadedFileId');
+        } catch (_) {
+          // Preserve the original failure for the user.
+        }
+      }
+      if (error is DioException) {
+        final message = _serverError(error, 'Could not upload file');
+        final status = error.response?.statusCode;
+        throw Exception(status == null ? message : '$message (HTTP $status)');
+      }
+      rethrow;
+    }
   }
 
   // Existing upload method is retained for the later functional phase.

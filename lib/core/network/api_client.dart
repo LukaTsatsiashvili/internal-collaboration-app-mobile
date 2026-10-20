@@ -22,6 +22,16 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
+          // Fastify rejects an empty request labeled application/json.
+          // DELETE /drive/:id has no body, just like the Web request.
+          // Keep JSON headers for requests that actually send JSON.
+          if (options.method.toUpperCase() == 'DELETE' &&
+              options.data == null) {
+            options.headers.removeWhere(
+              (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
+            );
+            options.contentType = null;
+          }
         // მახსოვრობიდან/სექიური საწყობიდან ტოკენის წამოღება
           String? token = await _secureStorage.read(key: 'access_token');
           if (token != null) {

@@ -76,7 +76,7 @@ class DriveService {
 
   /// Creates a real Personal Drive folder. Without fileId, /drive creates
   /// kind=FOLDER. This is the same endpoint used by the web interface.
-  Future<Map<String, dynamic>> createFolder(String name) async {
+  Future<Map<String, dynamic>> createFolder(String name, {String? parentId}) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty ||
         trimmed.length > 200 ||
@@ -89,7 +89,7 @@ class DriveService {
     try {
       final response = await _dio.post(
         '/drive',
-        data: {'name': trimmed, 'parentId': null},
+        data: {'name': trimmed, 'parentId': parentId},
       );
       final data = response.data;
       if (data is Map && data['success'] == true &&
@@ -108,6 +108,7 @@ class DriveService {
   Future<Map<String, dynamic>> importExcel(
     Uint8List bytes, {
     required String filename,
+    String? parentId,
   }) async {
     final name = ExcelToUniver.spreadsheetName(filename);
     final snapshot = await ExcelToUniver.convert(bytes, name: name);
@@ -116,7 +117,7 @@ class DriveService {
     try {
       final created = await _dio.post(
         '/drive/sheets',
-        data: {'name': name, 'parentId': null},
+        data: {'name': name, 'parentId': parentId},
       );
       final createdBody = created.data;
       if (createdBody is! Map ||

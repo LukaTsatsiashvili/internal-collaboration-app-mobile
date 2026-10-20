@@ -41,11 +41,21 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private var driveDownloadHandler: DriveDownloadHandler? = null
+
     private var pendingResult: MethodChannel.Result? = null
     private var pendingSource: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        driveDownloadHandler = DriveDownloadHandler(this)
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            DriveDownloadHandler.CHANNEL
+        ).setMethodCallHandler { call, result ->
+            driveDownloadHandler?.handle(call, result)
+                ?: result.error("DOWNLOAD_UNAVAILABLE", "Download handler unavailable", null)
+        }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SAVE_CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method != "saveDownloadedFile") {
@@ -84,6 +94,7 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Android framework but required for SAF callback")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (driveDownloadHandler?.onActivityResult(requestCode, resultCode, data) == true) return
         if (requestCode != SAVE_REQUEST_CODE) return
         val result = pendingResult ?: return
         val source = pendingSource

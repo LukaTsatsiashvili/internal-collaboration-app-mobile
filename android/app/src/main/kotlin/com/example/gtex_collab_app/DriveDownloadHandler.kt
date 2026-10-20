@@ -50,15 +50,22 @@ class DriveDownloadHandler(private val activity: Activity) {
 
         val mime = mimeFor(name)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            try {
-                val uri = saveToMediaStore(source, name, mime)
-                result.success(mapOf(
-                    "saved" to true,
-                    "opened" to openViewer(uri, mime),
-                ))
-            } catch (error: Exception) {
-                result.error("DOWNLOAD_SAVE_FAILED", error.message, null)
-            }
+            // Avoid blocking Flutter's Android UI thread for large workbooks.
+            Thread {
+                try {
+                    val uri = saveToMediaStore(source, name, mime)
+                    activity.runOnUiThread {
+                        result.success(mapOf(
+                            "saved" to true,
+                            "opened" to openViewer(uri, mime),
+                        ))
+                    }
+                } catch (error: Exception) {
+                    activity.runOnUiThread {
+                        result.error("DOWNLOAD_SAVE_FAILED", error.message, null)
+                    }
+                }
+            }.start()
             return
         }
 
@@ -190,14 +197,21 @@ class DriveDownloadHandler(private val activity: Activity) {
 
     @android.annotation.TargetApi(Build.VERSION_CODES.Q)
     private fun exists(name: String, relativePath: String): Boolean {
-        activity.contentResolver.query(
-            MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-            arrayOf(MediaStore.MediaColumns._ID),
-            "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
-            arrayOf(name, relativePath),
-            null,
-        )?.use { cursor -> return cursor.moveToFirst() }
-        return false
+        // Some vendors restrict querying Downloads entries; writing a new
+        // file should still work even when duplicate-name inspection fails.
+        return try {
+            activity.contentResolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.DISPLAY_NAME}=? AND ${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+                arrayOf(name, relativePath),
+                null,
+            )?.use { cursor -> cursor.moveToFirst() } ?: false
+        } catch (_: SecurityException) {
+            false
+        } catch (_: IllegalArgumentException) {
+            false
+        }
     }
 
     private fun openViewer(uri: Uri, mime: String): Boolean {

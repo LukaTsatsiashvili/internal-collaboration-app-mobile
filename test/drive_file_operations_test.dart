@@ -186,10 +186,17 @@ void main() {
     final service = DriveService(dio: mockDio(requests, payloads));
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: DrivePermissionsDialog(
-        item: folderItem(), service: service,
-      )),
+      home: Scaffold(body: Builder(builder: (context) => ElevatedButton(
+        onPressed: () => showDialog<bool>(
+          context: context,
+          builder: (_) => DrivePermissionsDialog(
+            item: folderItem(), service: service,
+          ),
+        ),
+        child: const Text('Open permissions'),
+      ))),
     ));
+    await tester.tap(find.text('Open permissions'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Permissions · Folder'), findsOneWidget);
     expect(find.text('Luka'), findsOneWidget);
@@ -216,9 +223,15 @@ void main() {
     final service = DriveService(dio: mockDio(requests, payloads));
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light,
-      home: Scaffold(body: DriveMoveDialog(
-          item: fileItem(), service: service)),
+      home: Scaffold(body: Builder(builder: (context) => ElevatedButton(
+        onPressed: () => showDialog<bool>(
+          context: context,
+          builder: (_) => DriveMoveDialog(item: fileItem(), service: service),
+        ),
+        child: const Text('Open move'),
+      ))),
     ));
+    await tester.tap(find.text('Open move'));
     await tester.pumpAndSettle();
     expect(find.text('Reports'), findsOneWidget);
     await tester.tap(find.text('Reports'));

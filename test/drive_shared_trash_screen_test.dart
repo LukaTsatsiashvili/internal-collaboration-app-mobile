@@ -128,60 +128,59 @@ Future<void> _pumpDrive(
 }
 
 void main() {
-  testWidgets('Header remains pinned and searchable across all Drive tabs',
+  testWidgets('Read-only tabs hide file tools and reclaim header space',
       (tester) async {
     final service = _DriveSectionsService();
     await _pumpDrive(tester, service);
 
     const headerKey = ValueKey('drive-persistent-header');
     const listKey = ValueKey('drive-tab-content');
-    const tabSharedMe = ValueKey('drive-tab-shared-with-me');
-    const tabTrash = ValueKey('drive-tab-trash');
-    const tabPersonal = ValueKey('drive-tab-personal');
+    const sharedMeKey = ValueKey('drive-tab-shared-with-me');
+    const trashKey = ValueKey('drive-tab-trash');
+    const personalKey = ValueKey('drive-tab-personal');
 
     final header = find.byKey(headerKey);
-    final content = find.byKey(listKey);
-    final upload = find.text('Upload files');
-    final search = find.byType(TextField).first;
-    final initialTop = tester.getTopLeft(header);
-    final uploadRect = tester.getRect(upload);
-    final searchRect = tester.getRect(search);
-    final controller = tester.widget<TextField>(search).controller;
-
     expect(header, findsOneWidget);
-    expect(content, findsOneWidget);
-    expect(upload, findsOneWidget);
+    expect(find.byKey(listKey), findsOneWidget);
+    expect(find.text('Upload files'), findsOneWidget);
+    expect(find.text('Import Excel'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
 
-    InkWell action() {
-      final ancestor = find.ancestor(
-        of: find.text('Upload files'),
-        matching: find.byType(InkWell),
-      );
-      return tester.widget<InkWell>(ancestor.first);
-    }
+    final fullHeight = tester.getSize(header).height;
+    final fullTop = tester.getTopLeft(header);
+    final tabs = find.byKey(personalKey);
+    final fullTabY = tester.getTopLeft(tabs).dy;
+    final initialSearchController =
+        tester.widget<TextField>(find.byType(TextField)).controller;
 
-    expect(action().onTap, isNotNull);
-
-    for (final tab in [tabSharedMe, tabTrash]) {
+    for (final tab in [sharedMeKey, trashKey]) {
       await tester.tap(find.byKey(tab));
       await tester.pumpAndSettle();
-      expect(find.byKey(headerKey), findsOneWidget);
+
+      expect(header, findsOneWidget);
       expect(find.byKey(listKey), findsOneWidget);
-      expect(find.text('Upload files'), findsOneWidget);
-      expect(tester.getTopLeft(find.byKey(headerKey)), initialTop);
-      expect(tester.getRect(find.text('Upload files')), uploadRect);
-      expect(tester.getRect(find.byType(TextField).first), searchRect);
-      expect(tester.widget<TextField>(find.byType(TextField).first).controller,
-          same(controller));
-      expect(action().onTap, isNull,
-          reason: 'Read-only and Trash tabs cannot upload');
+      expect(find.text('Drive'), findsOneWidget);
+      expect(find.text('Upload files'), findsNothing);
+      expect(find.text('Import Excel'), findsNothing);
+      expect(find.text('New Spreadsheet'), findsNothing);
+      expect(find.text('New Folder'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+      expect(tester.getTopLeft(header), fullTop);
+      expect(tester.getSize(header).height, lessThan(fullHeight));
+      expect(tester.getTopLeft(tabs).dy, lessThan(fullTabY));
     }
 
-    await tester.tap(find.byKey(tabPersonal));
+    await tester.tap(find.byKey(personalKey));
     await tester.pumpAndSettle();
-    expect(tester.getTopLeft(find.byKey(headerKey)), initialTop);
-    expect(tester.getRect(find.text('Upload files')), uploadRect);
-    expect(action().onTap, isNotNull);
+
+    expect(tester.getSize(header).height, fullHeight);
+    expect(tester.getTopLeft(header), fullTop);
+    expect(find.text('Upload files'), findsOneWidget);
+    expect(find.text('Import Excel'), findsOneWidget);
+    expect(find.byType(TextField), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller,
+        same(initialSearchController));
+    expect(service.calls.last, 'personal:null');
     expect(tester.takeException(), isNull);
   });
 
@@ -197,7 +196,8 @@ void main() {
     expect(service.calls, contains('shared-with-me:null'));
     expect(find.text('Shared presentation.pdf'), findsOneWidget);
     expect(find.text('Team folder'), findsOneWidget);
-    expect(find.text('Upload files'), findsOneWidget);
+    expect(find.text('Upload files'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
     expect(find.byTooltip('Download'), findsOneWidget);
     // Download is the sole Shared With Me action and must stay at the
     // trailing (right) edge of its card, not near the middle of the row.
@@ -229,6 +229,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(service.calls.last, 'trash:null');
+    expect(find.text('Upload files'), findsNothing);
+    expect(find.byType(TextField), findsNothing);
     expect(find.text('Empty Trash'), findsOneWidget);
     final clearButton = tester.widget<ElevatedButton>(
       find.byKey(const ValueKey('drive-empty-trash')),
@@ -254,18 +256,20 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Trash search and returning to Personal resets section state',
+  testWidgets('Trash keeps sorting and restores Personal toolbar on return',
       (tester) async {
     final service = _DriveSectionsService();
     await _pumpDrive(tester, service);
     await tester.tap(find.byKey(const ValueKey('drive-tab-trash')));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'Old');
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('Old folder'), findsOneWidget);
+    expect(find.text('Deleted document.pdf'), findsOneWidget);
+    expect(find.text('2 items in Trash'), findsOneWidget);
+    await tester.tap(find.text('Sort by date'));
     await tester.pump();
     expect(find.text('Old folder'), findsOneWidget);
-    expect(find.text('Deleted document.pdf'), findsNothing);
-    expect(find.text('1 item in Trash'), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('drive-tab-personal')));
     await tester.pumpAndSettle();

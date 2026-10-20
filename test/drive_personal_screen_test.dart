@@ -40,6 +40,27 @@ final personalItems = <Map<String, dynamic>>[
   },
 ];
 
+
+class RecordingFolderService extends FakeDriveService {
+  RecordingFolderService() : super(List<Map<String, dynamic>>.from(personalItems));
+  final createdNames = <String>[];
+
+  @override
+  Future<Map<String, dynamic>> createFolder(String name) async {
+    createdNames.add(name);
+    final folder = <String, dynamic>{
+      'id': 'new-folder',
+      'name': name,
+      'kind': 'FOLDER',
+      'owner': {'displayName': 'User'},
+      'file': null,
+      'updatedAt': '2026-10-20T11:00:00Z',
+    };
+    records.add(folder);
+    return folder;
+  }
+}
+
 Future<void> showDrive(WidgetTester tester, FakeDriveService service,
     {bool dark = false}) async {
   await tester.pumpWidget(MaterialApp(
@@ -109,4 +130,43 @@ void main() {
     expect(find.text('Untitled spreadsheet'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('New Folder reuses TaskGroupDialog and refreshes Personal',
+      (tester) async {
+    final service = RecordingFolderService();
+    await showDrive(tester, service, dark: true);
+
+    await tester.ensureVisible(find.text('New Folder'));
+    await tester.tap(find.text('New Folder'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Folder name'), findsOneWidget);
+    expect(find.text('Create Folder'), findsOneWidget);
+    expect(find.text('New Group'), findsNothing);
+
+    await tester.enterText(find.byType(TextField).last, 'Reports');
+    await tester.tap(find.text('Create Folder'));
+    await tester.pumpAndSettle();
+
+    expect(service.createdNames, ['Reports']);
+    expect(service.loads, 2);
+    expect(find.text('Reports'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('folder dialog rejects invalid slash names', (tester) async {
+    final service = RecordingFolderService();
+    await showDrive(tester, service);
+    await tester.ensureVisible(find.text('New Folder'));
+    await tester.tap(find.text('New Folder'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, 'Bad/Name');
+    await tester.tap(find.text('Create Folder'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('without slashes'), findsOneWidget);
+    expect(service.createdNames, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
 }

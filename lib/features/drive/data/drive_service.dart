@@ -1,37 +1,81 @@
 import 'package:dio/dio.dart';
 import '../../../core/network/api_client.dart';
 
+/// Personal Drive data returned by GET /drive, including real storage usage.
+/// The file list contains DriveItem records, not raw uploaded FileObjects.
+class PersonalDriveListing {
+  const PersonalDriveListing({
+    required this.items,
+    required this.usedBytes,
+  });
+
+  final List<Map<String, dynamic>> items;
+  final int usedBytes;
+}
+
 class DriveService {
   final ApiClient _apiClient = ApiClient();
 
-  // 1. ფაილებისა და საქაღალდეების სიის წამოღება (GET /drive ან /files)
-  Future<List<dynamic>> getDriveItems({String? folderId}) async {
+  /// Fetch the signed-in user's Personal space only. The backend expects
+  /// parentId (not folderId) and returns kind, file, owner and timestamps.
+  Future<PersonalDriveListing> getPersonalListing({String? parentId}) async {
     try {
       final response = await _apiClient.dio.get(
         '/drive',
-        queryParameters: {'folderId': ?folderId},
+        queryParameters: {
+          'view': 'personal',
+          if (parentId != null) 'parentId': parentId,
+        },
       );
-
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        return response.data['data'] as List<dynamic>;
+      final body = response.data;
+      if (response.statusCode == 200 &&
+          body is Map &&
+          body['success'] == true &&
+          body['data'] is List) {
+        final items = (body['data'] as List)
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        final meta = body['meta'];
+        final usedBytes = meta is Map && meta['usedBytes'] is num
+            ? (meta['usedBytes'] as num).toInt()
+            : 0;
+        return PersonalDriveListing(items: items, usedBytes: usedBytes);
       }
+      throw StateError('Drive returned an unexpected response');
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ფაილების ჩატვირთვა ვერ მოხერხდა');
+      final data = e.response?.data;
+      final error = data is Map ? data['error'] : null;
+      throw Exception(
+        error is Map && error['message'] != null
+            ? error['message'].toString()
+            : 'ფაილების ჩატვირთვა ვერ მოხერხდა',
+      );
     }
-    return [];
   }
 
-  // 2. ფაილის ატვირთვა სერვერზე (POST /files)
+  /// Backwards-compatible list accessor used by older Drive UI callers.
+  Future<List<dynamic>> getDriveItems({String? folderId}) async {
+    return (await getPersonalListing(parentId: folderId)).items;
+  }
+
+  // Existing upload method is retained for the later functional phase.
+  // Uploading to /files alone does not create a Drive item: linking is separate.
   Future<void> uploadFile(String filePath, String fileName) async {
     try {
-      String fileName = filePath.split('/').last;
-      FormData formData = FormData.fromMap({
+      final formData = FormData.fromMap({
         'file': await MultipartFile.fromFile(filePath, filename: fileName),
       });
 
       await _apiClient.dio.post('/files', data: formData);
     } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ფაილის ატვირთვა ვერ მოხერხდა');
+      final data = e.response?.data;
+      final error = data is Map ? data['error'] : null;
+      throw Exception(
+        error is Map && error['message'] != null
+            ? error['message'].toString()
+            : 'ფაილის ატვირთვა ვერ მოხერხდა',
+      );
     }
   }
 }

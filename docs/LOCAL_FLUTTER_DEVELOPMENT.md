@@ -26,6 +26,41 @@ Spreadsheet WebView permits HTTP only on `localhost`, `127.0.0.1`, or `::1`
 **in debug mode**; every other host or non-debug build still requires HTTPS.
 Do not disable these production safeguards.
 
+## USB reconnect and the Retry button
+
+**Local Server is not an Internet-hosted endpoint.** The address
+`http://127.0.0.1:5173` refers to the **Android device**, not the laptop.
+The app can reach the WSL server only while an authorized ADB connection
+is present **and** the port 5173 reverse mapping is active. Connecting
+the phone to mobile data or ordinary Wi-Fi does not recreate that mapping.
+
+After unplugging/replugging USB while Flutter is still open, execute in
+**Windows PowerShell**:
+
+```powershell
+adb devices
+adb reverse tcp:5173 tcp:5173
+adb reverse --list
+```
+
+On the **phone browser**, request
+`http://127.0.0.1:5173/api/v1/auth/me`. A JSON **401 response**
+without credentials confirms the API is reachable and is **expected**.
+A browser network error means the tunnel is not established yet; Retry
+in Flutter will not repair the ADB mapping.
+
+On **Windows PowerShell**, independently check the PC's Vite proxy:
+
+```powershell
+curl.exe -i http://127.0.0.1:5173/api/v1/auth/me
+```
+
+Check that Vite's development server and Fastify are running in WSL.
+If the phone should operate without USB, use Production Server for the
+Internet-accessible HTTPS deployment or set up a separately configured
+wireless-ADB/local-network profile; that mode is not enabled by the
+current Local Server launch profile.
+
 ## Production Server
 
 Select **Flutter - Production Server** and press F5. It uses the HTTPS API

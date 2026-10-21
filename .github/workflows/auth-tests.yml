@@ -1,0 +1,29 @@
+name: Flutter authentication regressions
+
+on:
+  push:
+    branches: [dev-luka]
+    paths:
+      - 'lib/core/network/**'
+      - 'lib/features/auth/**'
+      - 'test/auth_reconnect_test.dart'
+      - 'test/auth_session_test.dart'
+      - '.github/workflows/auth-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  auth-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Offline/online and native auth tests
+        run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart

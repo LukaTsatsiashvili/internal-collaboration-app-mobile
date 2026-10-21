@@ -10,7 +10,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 
 import '../features/chat/data/chat_service.dart';
-import '../features/auth/data/auth_service.dart';
 import '../core/network/api_client.dart';
 
 // Stitch-inspired messages list. The chat detail, dialog, and networking stay unchanged.

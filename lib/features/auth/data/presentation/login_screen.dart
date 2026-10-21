@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:gtex_collab_app/core/network/api_client.dart';
 import '../auth_service.dart';
 import 'package:gtex_collab_app/core/widgets/session_expired_dialog.dart';
 import 'package:gtex_collab_app/screens/main_navigation.dart';
@@ -127,6 +129,17 @@ class _LoginScreenState extends State<LoginScreen> {
                   _errorMessage!,
                   style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 14),
                   textAlign: TextAlign.center,
+                ),
+              ],
+              if (kDebugMode && _errorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'API: ${ApiClient.baseUrl}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
               const SizedBox(height: 24),

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,9 +8,9 @@ import 'package:gtex_collab_app/core/network/api_client.dart';
 import 'package:gtex_collab_app/core/network/auth_session.dart';
 import 'package:gtex_collab_app/features/auth/data/auth_service.dart';
 
-/// Fake Dio transports model an offline -> online transition without requiring
-/// a server, an emulator, or any production credentials.
-class _ConnectivityBackend {
+/// A fake transport, not an interceptor. Dio's real request/response/error
+/// pipeline therefore handles HTTP 401/404 exactly as it does on a device.
+class _ConnectivityBackend implements HttpClientAdapter {
   bool online = false;
   bool mobileRoutesInstalled = true;
   bool credentialsAccepted = true;
@@ -17,113 +20,86 @@ class _ConnectivityBackend {
   String validRefresh = 'refresh-original';
 
   void attach(Dio api, Dio refresh) {
-    api.interceptors.add(
-      InterceptorsWrapper(onRequest: (options, handler) {
-        if (!online) {
-          handler.reject(DioException(
-            requestOptions: options,
-            type: DioExceptionType.connectionError,
-            message: 'Simulated disconnection',
-          ));
-          return;
-        }
+    api.httpClientAdapter = this;
+    refresh.httpClientAdapter = this;
+  }
 
-        if (options.path == '/auth/mobile/login') {
-          loginRequests++;
-          if (!mobileRoutesInstalled) {
-            _error(options, handler, 404);
-            return;
-          }
-          if (!credentialsAccepted) {
-            _error(options, handler, 401);
-            return;
-          }
-          validAccess = 'access-from-login';
-          validRefresh = 'refresh-from-login';
-          _ok(options, handler, {
-            'accessToken': validAccess,
-            'refreshToken': validRefresh,
-            'user': {'id': 'employee-1'},
-          });
-          return;
-        }
-        if (options.path == '/auth/mobile/logout') {
-          _ok(options, handler, null);
-          return;
-        }
-        if (options.path == '/auth/me') {
-          final authorization = options.headers['Authorization'];
-          if (authorization != 'Bearer $validAccess') {
-            _error(options, handler, 401);
-            return;
-          }
-          _ok(options, handler, {'id': 'employee-1'});
-          return;
-        }
-        _error(options, handler, 404);
-      }),
-    );
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    if (!online) {
+      throw DioException(
+        requestOptions: options,
+        type: DioExceptionType.connectionError,
+        message: 'Simulated disconnection',
+      );
+    }
 
-    refresh.interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
-      if (!online) {
-        handler.reject(DioException(
-          requestOptions: options,
-          type: DioExceptionType.connectionError,
-          message: 'Simulated disconnection',
-        ));
-        return;
-      }
-      refreshRequests++;
-      if (!mobileRoutesInstalled) {
-        _error(options, handler, 404);
-        return;
-      }
-      final body = options.data;
-      if (options.path != '/auth/mobile/refresh' ||
-          body is! Map || body['refreshToken'] != validRefresh) {
-        _error(options, handler, 401);
-        return;
-      }
-      validRefresh = 'refresh-rotated-$refreshRequests';
-      validAccess = 'access-refreshed-$refreshRequests';
-      _ok(options, handler, {
+    if (options.path == '/auth/mobile/login') {
+      loginRequests++;
+      if (!mobileRoutesInstalled) return _error(404);
+      if (!credentialsAccepted) return _error(401);
+      validAccess = 'access-from-login';
+      validRefresh = 'refresh-from-login';
+      return _ok({
         'accessToken': validAccess,
         'refreshToken': validRefresh,
         'user': {'id': 'employee-1'},
       });
-    }));
+    }
+    if (options.path == '/auth/mobile/logout') {
+      return _ok(null);
+    }
+    if (options.path == '/auth/me') {
+      final authorization = options.headers['Authorization'];
+      if (authorization != 'Bearer $validAccess') return _error(401);
+      return _ok({'id': 'employee-1'});
+    }
+    if (options.path == '/auth/mobile/refresh') {
+      refreshRequests++;
+      if (!mobileRoutesInstalled) return _error(404);
+      final body = options.data;
+      if (body is! Map || body['refreshToken'] != validRefresh) {
+        return _error(401);
+      }
+      validRefresh = 'refresh-rotated-$refreshRequests';
+      validAccess = 'access-refreshed-$refreshRequests';
+      return _ok({
+        'accessToken': validAccess,
+        'refreshToken': validRefresh,
+        'user': {'id': 'employee-1'},
+      });
+    }
+    return _error(404);
   }
 
-  static void _ok(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-    Object? data,
-  ) {
-    handler.resolve(Response<dynamic>(
-      requestOptions: options,
-      statusCode: 200,
-      data: {'success': true, 'data': data},
-    ));
-  }
+  static ResponseBody _ok(Object? data) => _response(
+        200,
+        {'success': true, 'data': data},
+      );
 
-  static void _error(
-    RequestOptions options,
-    RequestInterceptorHandler handler,
-    int status,
-  ) {
-    handler.reject(DioException(
-      requestOptions: options,
-      type: DioExceptionType.badResponse,
-      response: Response<dynamic>(
-        requestOptions: options,
-        statusCode: status,
-        data: {
+  static ResponseBody _error(int status) => _response(
+        status,
+        {
           'success': false,
           'error': {'code': 'TEST_$status', 'message': 'Test error'},
         },
-      ),
-    ));
-  }
+      );
+
+  static ResponseBody _response(int status, Map<String, dynamic> data) =>
+      ResponseBody.fromString(
+        jsonEncode(data),
+        status,
+        headers: {
+          Headers.contentTypeHeader: ['application/json'],
+        },
+      );
+
+  @override
+  void close({bool force = false}) {}
 }
 
 void main() {
@@ -145,7 +121,7 @@ void main() {
     auth = AuthService(apiClient: api);
   });
 
-  test('offline startup keeps session, and Retry succeeds after connectivity returns',
+  test('offline startup keeps session, and Retry succeeds when online',
       () async {
     await session.saveLogin(
       accessToken: 'expired-access',
@@ -194,7 +170,7 @@ void main() {
     expect(await session.getRefreshToken(), 'refresh-original');
   });
 
-  test('login reports offline, missing API, and wrong credentials distinctly',
+  test('login distinguishes offline, outdated API and invalid credentials',
       () async {
     backend.online = false;
     await expectLater(
@@ -219,7 +195,8 @@ void main() {
     );
   });
 
-  test('a simultaneous auth refresh remains single-flight', () async {
+  test('concurrent expired requests consume only one rotating refresh token',
+      () async {
     await session.saveLogin(
       accessToken: 'expired-access',
       refreshToken: 'refresh-original',
@@ -231,6 +208,21 @@ void main() {
       auth.checkSession(),
     ]);
     expect(outcomes, everyElement(StartupSessionStatus.authenticated));
+    expect(backend.refreshRequests, 1);
+  });
+
+  test('another Retry works after a transient failure without restart',
+      () async {
+    await session.saveLogin(
+      accessToken: 'expired-access',
+      refreshToken: 'refresh-original',
+    );
+    backend.online = false;
+    expect(await auth.checkSession(), StartupSessionStatus.unavailable);
+    expect(await auth.checkSession(), StartupSessionStatus.unavailable);
+
+    backend.online = true;
+    expect(await auth.checkSession(), StartupSessionStatus.authenticated);
     expect(backend.refreshRequests, 1);
   });
 }

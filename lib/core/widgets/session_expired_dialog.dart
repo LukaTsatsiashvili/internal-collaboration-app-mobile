@@ -5,9 +5,7 @@ Future<void> showSessionExpiredDialog(BuildContext context) {
   return showDialog<void>(
     context: context,
     barrierDismissible: false,
-    builder: (dialogContext) => PopScope(
-      canPop: false,
-      child: AlertDialog(
+    builder: (dialogContext) => AlertDialog(
         icon: const Icon(Icons.lock_clock_outlined, size: 32),
         title: const Text('სესია დასრულდა'),
         content: const Text(
@@ -22,7 +20,6 @@ Future<void> showSessionExpiredDialog(BuildContext context) {
             child: const Text('ავტორიზაციის გვერდზე გადასვლა'),
           ),
         ],
-      ),
     ),
   );
 }

@@ -44,6 +44,30 @@ matching backend has been deployed.
 - Existing installs have only a legacy access token without a refresh token;
   they will require **one new sign-in** after upgrading to this mechanism.
 
+## Offline/reconnect verification (current regression)
+
+- Flutter-side reconnect fix only: **no Web/Backend code changes are required**
+  for this patch. The backend must already support the native mobile API
+  endpoints introduced in the earlier authorization phase.
+- Run `flutter test test/auth_reconnect_test.dart` and
+  `flutter test test/auth_session_test.dart` before device verification.
+- Disconnect mobile Internet while signed in, restart the app and confirm
+  that Retry remains available without deleting saved credentials.
+- Restore Internet **without terminating the app**, select Retry, and verify
+  entry into Dashboard. Then repeat with an expired access token.
+- Choose "სხვა ანგარიშით შესვლა" when offline, re-enable Internet and
+  sign in using the same valid credentials. The login must not reuse stale
+  Authorization headers.
+- If Login displays the local transport warning, verify the running
+  `npm run dev` terminal, `adb devices`, and `adb reverse --list`.
+  ADB reverse is required for the Local Server debug profile.
+- If Login says the mobile API is not installed, update and restart the
+  selected backend branch before retrying. Do not misdiagnose a 404 as
+  incorrect credentials.
+- Login POSTs and refresh-token rotation POSTs must **not** be automatically
+  repeated after a network timeout; automatically retrying these requests
+  risks duplicated sessions or consuming an already-rotated credential.
+
 ## Manual regression checklist
 
 - Login with a valid and an invalid password.

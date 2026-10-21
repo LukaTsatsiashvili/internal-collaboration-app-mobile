@@ -77,12 +77,9 @@ class AuthService {
       if (remaining == null || remaining.isEmpty) {
         return StartupSessionStatus.expired;
       }
-      final status = error.response?.statusCode;
-      if (status == 401 || status == 403) {
-        // Auth is definitely rejected after retry; no false "offline" state.
-        await _session.clear();
-        return StartupSessionStatus.expired;
-      }
+      // A retained refresh token after a 401 means that its refresh attempt
+      // failed transiently (e.g. no Internet). ApiClient only clears tokens
+      // after the backend definitively rejects the refresh credential.
       return StartupSessionStatus.unavailable;
     } catch (_) {
       return StartupSessionStatus.unavailable;

@@ -1,15 +1,21 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import 'auth_session.dart';
 
-enum AuthRefreshResult { refreshed, expired, unavailable }
+enum AuthRefreshResult { refreshed, expired, unavailable, unsupported }
+
+/// Mobile auth endpoints have not been deployed to the chosen API server.
+class MobileAuthBackendOutdated implements Exception {
+  const MobileAuthBackendOutdated();
+}
 
 /// A shared HTTP client and a single refresh transaction for all modules.
 /// Browser cookie sessions are intentionally NOT used by the native app.
 class ApiClient {
-  ApiClient._internal() {
-    dio = Dio(defaultOptions());
-    final refreshDio = Dio(defaultOptions());
+  ApiClient._internal({Dio? client, Dio? refreshClient}) {
+    dio = client ?? Dio(defaultOptions());
+    final refreshDio = refreshClient ?? Dio(defaultOptions());
 
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
@@ -58,6 +64,14 @@ class ApiClient {
             handler.resolve(await _retry(options));
             return;
           }
+          if (result == AuthRefreshResult.unsupported) {
+            handler.reject(DioException(
+              requestOptions: options,
+              type: DioExceptionType.unknown,
+              error: const MobileAuthBackendOutdated(),
+            ));
+            return;
+          }
           if (result == AuthRefreshResult.expired) {
             await AuthSession.instance.expireIfCurrent(failedToken);
             handler.next(error);
@@ -85,9 +99,14 @@ class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
 
+  /// Inject deterministic transports for offline/reconnect regression tests.
+  @visibleForTesting
+  ApiClient.testing({required Dio client, required Dio refreshClient})
+      : this._internal(client: client, refreshClient: refreshClient);
+
   late final Dio dio;
   late final Dio _refreshClient;
-  static Future<AuthRefreshResult>? _pendingRefresh;
+  Future<AuthRefreshResult>? _pendingRefresh;
 
   static const String baseUrl = String.fromEnvironment(
     'COLLAB_API_BASE_URL',
@@ -170,6 +189,7 @@ class ApiClient {
       final status = error.response?.statusCode;
       // Invalid/consumed credentials are final. Server overload, 5xx,
       // connection loss and timeouts are transient, never forced logout.
+      if (status == 404) return AuthRefreshResult.unsupported;
       if (status == 400 || status == 401 || status == 403) {
         return AuthRefreshResult.expired;
       }

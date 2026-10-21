@@ -669,9 +669,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Future<void> _initializeChat() async {
     try {
-      final profile = await AuthService().checkSession()
-          ? await _getProfileId()
-          : null;
+      // The application shell already established the authenticated session.
+      final profile = await _getProfileId();
       final messages = await _chatService.getMessages(widget.conversationId);
 
       setState(() {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,6 +18,22 @@ class AuthSession {
   final ValueNotifier<int> expiredRevision = ValueNotifier<int>(0);
   bool _authenticatedScreenActive = false;
   int _generation = 0;
+  Future<void> _lastMutation = Future<void>.value();
+
+  /// Credential writes must not interleave (e.g. a refresh finishing after
+  /// logout, or a new login racing with the previous user's refresh).
+  Future<T> _serialize<T>(Future<T> Function() action) async {
+    final previous = _lastMutation;
+    final done = Completer<void>();
+    _lastMutation = done.future;
+    await previous;
+    try {
+      return await action();
+    } finally {
+      done.complete();
+    }
+  }
+
 
   Future<String?> getAccessToken() => _storage.read(key: accessTokenKey);
   Future<String?> getRefreshToken() => _storage.read(key: refreshTokenKey);
@@ -29,10 +46,13 @@ class AuthSession {
     required String accessToken,
     required String refreshToken,
   }) async {
-    _generation++;
-    await _storage.write(key: refreshTokenKey, value: refreshToken);
-    await _storage.write(key: accessTokenKey, value: accessToken);
-    _authenticatedScreenActive = true;
+    final generation = ++_generation;
+    await _serialize(() async {
+      if (generation != _generation) return;
+      await _storage.write(key: refreshTokenKey, value: refreshToken);
+      await _storage.write(key: accessTokenKey, value: accessToken);
+      _authenticatedScreenActive = true;
+    });
   }
 
   /// Guard against a late refresh reviving a session after logout/new login.
@@ -42,13 +62,15 @@ class AuthSession {
     required String accessToken,
     required String refreshToken,
   }) async {
-    if (_generation != generation ||
-        await getRefreshToken() != previousRefreshToken) {
-      return false;
-    }
-    await _storage.write(key: refreshTokenKey, value: refreshToken);
-    await _storage.write(key: accessTokenKey, value: accessToken);
-    return _generation == generation;
+    return _serialize(() async {
+      if (_generation != generation ||
+          await getRefreshToken() != previousRefreshToken) {
+        return false;
+      }
+      await _storage.write(key: refreshTokenKey, value: refreshToken);
+      await _storage.write(key: accessTokenKey, value: accessToken);
+      return true;
+    });
   }
 
   int get generation => _generation;
@@ -56,8 +78,11 @@ class AuthSession {
   Future<void> clear() async {
     _generation++;
     _authenticatedScreenActive = false;
-    await _storage.delete(key: accessTokenKey);
-    await _storage.delete(key: refreshTokenKey);
+    await _serialize(() async {
+      // Revoke the renewable credential before the short-lived access token.
+      await _storage.delete(key: refreshTokenKey);
+      await _storage.delete(key: accessTokenKey);
+    });
   }
 
   /// Only invalidate the credentials belonging to the failed request.

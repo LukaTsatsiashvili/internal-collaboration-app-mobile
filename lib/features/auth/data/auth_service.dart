@@ -130,18 +130,19 @@ class AuthService {
   /// Logout invalidates the server's *native* session if reachable. Local
   /// credentials are always cleared, even with no network connectivity.
   Future<void> logout() async {
+    // Local sign-out must not wait for DNS/HTTP timeouts after network loss.
+    // Revoke the captured credential on the server as a bounded best effort.
+    final refresh = await _session.getRefreshToken();
+    await _session.clear();
+    if (refresh == null || refresh.isEmpty) return;
     try {
-      final refresh = await _session.getRefreshToken();
-      if (refresh != null && refresh.isNotEmpty) {
-        await _apiClient.dio.post(
-          '/auth/mobile/logout',
-          data: {'refreshToken': refresh},
-        );
-      }
+      await _apiClient.dio.post(
+        '/auth/mobile/logout',
+        data: {'refreshToken': refresh},
+      ).timeout(const Duration(seconds: 3));
     } catch (_) {
-      // No network: protected credentials are still removed immediately.
-    } finally {
-      await _session.clear();
+      // Offline logout is always local; remote session expires naturally
+      // if the best-effort revocation could not reach the backend.
     }
   }
 

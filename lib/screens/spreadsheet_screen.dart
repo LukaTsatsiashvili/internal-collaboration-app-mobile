@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -15,13 +16,29 @@ class SpreadsheetScreen extends StatefulWidget {
   final String id;
   final String name;
 
-  /// The editor and REST API must use the same origin. This defaults to
-  /// collaboration.gtexshop.ge; optional API URL overrides automatically
-  /// update the editor too, preventing cross-environment mismatches.
-  static Uri editorUri(String id) {
-    final api = Uri.parse(ApiClient.baseUrl);
-    if (api.scheme != 'https' || api.host.isEmpty) {
-      throw StateError('Spreadsheet editor requires an HTTPS API origin.');
+  /// The editor and REST API must use the same origin. Production and all
+  /// non-loopback hosts require HTTPS. For USB/ADB local development, allow
+  /// HTTP only on a loopback host in Flutter debug builds.
+  static Uri editorUri(String id) =>
+      editorUriForBaseUrl(id, ApiClient.baseUrl);
+
+  /// An injectable URL builder keeps the local/production security policy
+  /// covered by tests without changing the compile-time API configuration.
+  static Uri editorUriForBaseUrl(
+    String id,
+    String baseUrl, {
+    bool allowDebugLoopbackHttp = kDebugMode,
+  }) {
+    final api = Uri.parse(baseUrl);
+    final isLoopback = api.host == '127.0.0.1' ||
+        api.host == 'localhost' ||
+        api.host == '::1';
+    final isAllowedLocalHttp =
+        allowDebugLoopbackHttp && api.scheme == 'http' && isLoopback;
+    if (api.host.isEmpty || (api.scheme != 'https' && !isAllowedLocalHttp)) {
+      throw StateError(
+        'Spreadsheet editor requires HTTPS except for loopback HTTP in debug mode.',
+      );
     }
     return api.replace(
       pathSegments: ['mobile', 'sheets', id],

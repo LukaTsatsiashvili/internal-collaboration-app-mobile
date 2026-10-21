@@ -1,0 +1,20 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ADB Reverse - Local Server",
+      "type": "process",
+      "command": "adb",
+      "args": [
+        "reverse",
+        "tcp:5173",
+        "tcp:5173"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    }
+  ]
+}

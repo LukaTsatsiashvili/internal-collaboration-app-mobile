@@ -16,6 +16,38 @@ void main() {
     expect(editor.fragment, isEmpty);
   });
 
+  test('local ADB WebView route uses the same HTTP loopback origin', () {
+    final editor = SpreadsheetScreen.editorUriForBaseUrl(
+      'sheet-123',
+      'http://127.0.0.1:5173/api/v1',
+      allowDebugLoopbackHttp: true,
+    );
+
+    expect(editor.toString(), 'http://127.0.0.1:5173/mobile/sheets/sheet-123');
+  });
+
+  test('local HTTP editor is not permitted outside debug mode', () {
+    expect(
+      () => SpreadsheetScreen.editorUriForBaseUrl(
+        'sheet-123',
+        'http://127.0.0.1:5173/api/v1',
+        allowDebugLoopbackHttp: false,
+      ),
+      throwsStateError,
+    );
+  });
+
+  test('non-local HTTP editor is never permitted', () {
+    expect(
+      () => SpreadsheetScreen.editorUriForBaseUrl(
+        'sheet-123',
+        'http://192.168.1.25:5173/api/v1',
+        allowDebugLoopbackHttp: true,
+      ),
+      throwsStateError,
+    );
+  });
+
   test('Workbook IDs remain a single escaped URL path segment', () {
     const unsafeId = 'special/id?fragment#value';
     final editor = SpreadsheetScreen.editorUri(unsafeId);

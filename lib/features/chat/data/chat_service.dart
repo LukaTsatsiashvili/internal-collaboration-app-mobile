@@ -158,7 +158,7 @@ class ChatService {
 
     String? token = await _secureStorage.read(key: 'access_token');
 
-    _socket = IO.io('https://collaboration.gtexshop.ge', <String, dynamic>{
+    _socket = IO.io(Uri.parse(ApiClient.baseUrl).origin, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': true,
       'auth': {'token': token},

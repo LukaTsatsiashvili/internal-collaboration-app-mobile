@@ -1,56 +1,118 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/auth_session.dart';
 
+enum StartupSessionStatus { authenticated, signedOut, expired, unavailable }
+
+/// Native login/refresh/logout: web HttpOnly-cookie authentication is unchanged.
 class AuthService {
   final ApiClient _apiClient = ApiClient();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final AuthSession _session = AuthSession.instance;
 
-  // 1. სისტემაში შესვლა
   Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
       final response = await _apiClient.dio.post(
-        '/auth/login',
+        '/auth/mobile/login',
         data: {'email': email, 'password': password},
       );
-
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        final data = response.data['data'];
-        final accessToken = data['accessToken'];
-        
-        await _secureStorage.write(key: 'access_token', value: accessToken);
-        return data['user'];
+      final body = response.data;
+      if (body is! Map || body['success'] != true || body['data'] is! Map) {
+        throw StateError('Invalid login response');
       }
-    } on DioException catch (e) {
-      throw Exception(e.response?.data['error']['message'] ?? 'ავტორიზაციის შეცდომა');
+      final data = body['data'] as Map;
+      final access = data['accessToken'];
+      final refresh = data['refreshToken'];
+      if (access is! String || refresh is! String ||
+          access.isEmpty || refresh.isEmpty) {
+        throw StateError('Missing native session credentials');
+      }
+      await _session.saveLogin(accessToken: access, refreshToken: refresh);
+      final user = data['user'];
+      return user is Map ? Map<String, dynamic>.from(user) : null;
+    } on DioException catch (error) {
+      throw Exception(_readError(error, 'ავტორიზაცია ვერ მოხერხდა'));
     }
-    return null;
   }
 
-  // 2. სესიის შემოწმება (იყენებს თუ არა მომხმარებელი არსებულ ვალიდურ ტოკენს)
-  Future<bool> checkSession() async {
+  /// Network outages never turn into an unexplained sign-out. The previous
+  /// checkSession() bool conflated server outages with revoked credentials.
+  Future<StartupSessionStatus> checkSession() async {
+    final access = await _session.getAccessToken();
+    final refresh = await _session.getRefreshToken();
+    if ((access == null || access.isEmpty) &&
+        (refresh == null || refresh.isEmpty)) {
+      return StartupSessionStatus.signedOut;
+    }
+
+    // One-time migration from the old Flutter version which only saved a
+    // short-lived access token and could not possibly refresh it.
+    if (refresh == null || refresh.isEmpty) {
+      await _session.clear();
+      return StartupSessionStatus.signedOut;
+    }
+
+    if (access == null || access.isEmpty) {
+      final status = await _apiClient.refreshSession();
+      if (status == AuthRefreshResult.expired) {
+        await _session.clear();
+        return StartupSessionStatus.expired;
+      }
+      if (status == AuthRefreshResult.unavailable) {
+        return StartupSessionStatus.unavailable;
+      }
+    }
+
     try {
-      final token = await _secureStorage.read(key: 'access_token');
-      if (token == null || token.isEmpty) return false;
-
       final response = await _apiClient.dio.get('/auth/me');
-      if (response.statusCode == 200 && response.data['success'] == true) {
-        return true;
+      if (response.statusCode == 200 &&
+          response.data is Map &&
+          response.data['success'] == true) {
+        _session.markAuthenticated();
+        return StartupSessionStatus.authenticated;
       }
+      return StartupSessionStatus.unavailable;
+    } on DioException catch (error) {
+      // On 401, ApiClient has already attempted the single-flight refresh.
+      final remaining = await _session.getRefreshToken();
+      if (remaining == null || remaining.isEmpty) {
+        return StartupSessionStatus.expired;
+      }
+      final status = error.response?.statusCode;
+      if (status == 401 || status == 403) {
+        // Auth is definitely rejected after retry; no false "offline" state.
+        await _session.clear();
+        return StartupSessionStatus.expired;
+      }
+      return StartupSessionStatus.unavailable;
     } catch (_) {
-      // თუ ტოკენი ვადაგასულია ან სერვერი მიუწვდომელია
+      return StartupSessionStatus.unavailable;
     }
-    return false;
   }
 
-  // 3. სრული გასვლა (Logout)
+  /// Logout invalidates the server's *native* session if reachable. Local
+  /// credentials are always cleared, even with no network connectivity.
   Future<void> logout() async {
     try {
-      await _apiClient.dio.post('/auth/logout');
+      final refresh = await _session.getRefreshToken();
+      if (refresh != null && refresh.isNotEmpty) {
+        await _apiClient.dio.post(
+          '/auth/mobile/logout',
+          data: {'refreshToken': refresh},
+        );
+      }
     } catch (_) {
-      // თუნდაც ბექენდზე მოთხოვნა ჩავარდეს, ლოკალურად აუცილებლად ვასუფთავებთ
+      // No network: protected credentials are still removed immediately.
     } finally {
-      await _secureStorage.delete(key: 'access_token');
+      await _session.clear();
     }
+  }
+
+  String _readError(DioException error, String fallback) {
+    final body = error.response?.data;
+    final issue = body is Map ? body['error'] : null;
+    if (issue is Map && issue['message'] is String) {
+      return issue['message'] as String;
+    }
+    return fallback;
   }
 }

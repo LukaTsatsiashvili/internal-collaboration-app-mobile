@@ -60,9 +60,17 @@ class ApiClient {
           }
           if (result == AuthRefreshResult.expired) {
             await AuthSession.instance.expireIfCurrent(failedToken);
+            handler.next(error);
+            return;
           }
-          // Network/server failures are NOT proof of an expired session.
-          handler.next(error);
+          // The original 401 is only due to an expired *access* token.
+          // If refresh is unavailable, report a temporary connection failure
+          // rather than confusing modules with an apparent forced sign-out.
+          handler.reject(DioException(
+            requestOptions: options,
+            type: DioExceptionType.connectionError,
+            message: 'სესიასთან დაკავშირება დროებით ვერ მოხერხდა. სცადეთ ხელახლა.',
+          ));
         } on DioException catch (retryError) {
           handler.reject(retryError);
         } catch (_) {

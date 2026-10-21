@@ -10,6 +10,7 @@ import 'package:gtex_collab_app/features/auth/data/auth_service.dart';
 class _ConnectivityBackend {
   bool online = false;
   bool mobileRoutesInstalled = true;
+  bool credentialsAccepted = true;
   int refreshRequests = 0;
   int loginRequests = 0;
   String validAccess = 'access-updated';
@@ -31,6 +32,10 @@ class _ConnectivityBackend {
           loginRequests++;
           if (!mobileRoutesInstalled) {
             _error(options, handler, 404);
+            return;
+          }
+          if (!credentialsAccepted) {
+            _error(options, handler, 401);
             return;
           }
           validAccess = 'access-from-login';
@@ -187,6 +192,31 @@ void main() {
 
     expect(await auth.checkSession(), StartupSessionStatus.updateRequired);
     expect(await session.getRefreshToken(), 'refresh-original');
+  });
+
+  test('login reports offline, missing API, and wrong credentials distinctly',
+      () async {
+    backend.online = false;
+    await expectLater(
+      auth.login('employee@example.com', 'CorrectPassword!'),
+      throwsA(predicate((e) =>
+          e.toString().contains('დაკავშირება ვერ მოხერხდა'))),
+    );
+    expect(await session.getRefreshToken(), isNull);
+
+    backend.online = true;
+    backend.mobileRoutesInstalled = false;
+    await expectLater(
+      auth.login('employee@example.com', 'CorrectPassword!'),
+      throwsA(predicate((e) => e.toString().contains('განახლებული'))),
+    );
+
+    backend.mobileRoutesInstalled = true;
+    backend.credentialsAccepted = false;
+    await expectLater(
+      auth.login('employee@example.com', 'WrongPassword!'),
+      throwsA(predicate((e) => e.toString().contains('პაროლი არასწორია'))),
+    );
   });
 
   test('a simultaneous auth refresh remains single-flight', () async {

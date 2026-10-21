@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:gtex_collab_app/core/network/api_client.dart';
 import '../auth_service.dart';
 import 'login_screen.dart';
 import 'package:gtex_collab_app/screens/main_navigation.dart';
@@ -135,6 +137,17 @@ class _SplashScreenState extends State<SplashScreen> {
                           'თქვენი სესია არ გაუქმებულა.',
                     textAlign: TextAlign.center,
                   ),
+                  if (kDebugMode) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'API: ${ApiClient.baseUrl}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   FilledButton.icon(
                     onPressed: _checking ? null : _initializeApp,

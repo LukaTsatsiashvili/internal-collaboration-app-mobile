@@ -168,8 +168,9 @@ class AuthService {
       final isLocal = target?.host == '127.0.0.1' ||
           target?.host == 'localhost';
       if (isLocal) {
-        return 'ლოკალურ სერვერთან დაკავშირება ვერ მოხერხდა. '
-            'შეამოწმეთ WSL სერვერი და USB/ADB reverse კავშირი.';
+        return 'ლოკალურ სერვერთან კავშირი ვერ დამყარდა. '
+            'Local Server რეჟიმში აუცილებელია USB კავშირი და აქტიური '
+            'adb reverse tcp:5173 tcp:5173. მხოლოდ Wi-Fi საკმარისი არ არის.';
       }
       return 'სერვერთან დაკავშირება ვერ მოხერხდა. '
           'შეამოწმეთ ინტერნეტი და სცადეთ ხელახლა.';

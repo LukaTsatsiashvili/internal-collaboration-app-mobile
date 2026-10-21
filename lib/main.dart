@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_theme.dart';
+import 'core/network/auth_session.dart';
+import 'core/widgets/session_expired_dialog.dart';
+import 'features/auth/data/presentation/login_screen.dart';
 
 import 'features/auth/data/presentation/splash_screen.dart';
 
@@ -25,16 +28,20 @@ class InternalCollaborationApp extends StatefulWidget {
 class _InternalCollaborationAppState extends State<InternalCollaborationApp>
     with WidgetsBindingObserver {
   bool _keyboardWasVisible = false;
+  bool _showingExpiredDialog = false;
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AuthSession.instance.expiredRevision.addListener(_onSessionExpired);
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AuthSession.instance.expiredRevision.removeListener(_onSessionExpired);
     super.dispose();
   }
 
@@ -53,6 +60,32 @@ class _InternalCollaborationAppState extends State<InternalCollaborationApp>
       });
     }
     _keyboardWasVisible = keyboardVisible;
+  }
+
+  void _onSessionExpired() {
+    if (_showingExpiredDialog) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final navigator = _navigatorKey.currentState;
+      if (!mounted || navigator == null || _showingExpiredDialog) return;
+      _showingExpiredDialog = true;
+      try {
+        await showSessionExpiredDialog(navigator.context);
+        if (!mounted) return;
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute<void>(
+            builder: (_) => LoginScreen(
+              onToggleTheme: _toggleTheme,
+              onChangeLanguage: _changeLanguage,
+              currentLanguage: _currentLanguage,
+              currentThemeMode: _themeMode,
+            ),
+          ),
+          (_) => false,
+        );
+      } finally {
+        _showingExpiredDialog = false;
+      }
+    });
   }
 
   void _restoreImmersiveMode() {
@@ -81,6 +114,7 @@ class _InternalCollaborationAppState extends State<InternalCollaborationApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Internal Collaboration',
+      navigatorKey: _navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

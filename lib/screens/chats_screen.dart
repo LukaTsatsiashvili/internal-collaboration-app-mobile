@@ -671,6 +671,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       // The application shell already established the authenticated session.
       final profile = await _getProfileId();
       final messages = await _chatService.getMessages(widget.conversationId);
+      if (!mounted) return;
 
       setState(() {
         _currentUserId = profile;
@@ -681,6 +682,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       _chatService.joinConversation(widget.conversationId);
 
       _chatService.initSocket((incomingMessage) {
+        if (!mounted || incomingMessage is! Map) return;
         final msgConvId =
             incomingMessage['conversationId'] ??
             incomingMessage['conversation']?['id'];
@@ -705,7 +707,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         }
       });
     } catch (_) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

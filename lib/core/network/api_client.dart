@@ -125,10 +125,12 @@ class ApiClient {
     if (options.method.toUpperCase() != 'DELETE' || options.data != null) {
       return;
     }
+    // Dio stores Content-Type inside headers. Deleting the header is enough.
+    // Setting RequestOptions.contentType = null afterwards can trigger a
+    // type error inside Dio's case-insensitive header map (5.x).
     options.headers.removeWhere(
       (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
     );
-    options.contentType = null;
   }
 
   static BaseOptions defaultOptions() => BaseOptions(
@@ -213,7 +215,8 @@ class ApiClient {
       headers: headers,
       extra: {...previous.extra, 'authRetried': true},
     );
-    if (data is FormData) retry.contentType = null;
+    // The cloned multipart body will supply its own boundary. Do not call
+    // retry.contentType = null: Dio's header setter is unsafe here.
     return dio.fetch<dynamic>(retry);
   }
 }

@@ -105,6 +105,11 @@ class AuthService {
   }
 
   String _readError(DioException error, String fallback) {
+    if (error.response?.statusCode == 404 &&
+        error.requestOptions.path == '/auth/mobile/login') {
+      return 'სერვერს მობილური ავტორიზაციის ახალი ვერსია არ აქვს. '
+          'დაუკავშირდით სისტემის ადმინისტრატორს.';
+    }
     final body = error.response?.data;
     final issue = body is Map ? body['error'] : null;
     if (issue is Map && issue['message'] is String) {

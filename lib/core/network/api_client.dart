@@ -128,9 +128,11 @@ class ApiClient {
     // Dio stores Content-Type inside headers. Deleting the header is enough.
     // Setting RequestOptions.contentType = null afterwards can trigger a
     // type error inside Dio's case-insensitive header map (5.x).
-    options.headers.removeWhere(
+    final headers = Map<String, dynamic>.from(options.headers);
+    headers.removeWhere(
       (key, _) => key.toLowerCase() == Headers.contentTypeHeader,
     );
+    options.headers = headers;
   }
 
   static BaseOptions defaultOptions() => BaseOptions(

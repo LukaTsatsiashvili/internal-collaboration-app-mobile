@@ -128,14 +128,14 @@ class ApiClient {
   }
 
   Future<AuthRefreshResult> _performRefresh(Dio client) async {
-    final session = AuthSession.instance;
-    final priorRefresh = await session.getRefreshToken();
-    if (priorRefresh == null || priorRefresh.isEmpty) {
-      return AuthRefreshResult.expired;
-    }
-    final generation = session.generation;
-
     try {
+      final session = AuthSession.instance;
+      final priorRefresh = await session.getRefreshToken();
+      if (priorRefresh == null || priorRefresh.isEmpty) {
+        return AuthRefreshResult.expired;
+      }
+      final generation = session.generation;
+
       final response = await client.post<dynamic>(
         '/auth/mobile/refresh',
         data: {'refreshToken': priorRefresh},

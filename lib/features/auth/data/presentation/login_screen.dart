@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../auth_service.dart';
+import 'package:gtex_collab_app/core/widgets/session_expired_dialog.dart';
 import 'package:gtex_collab_app/screens/main_navigation.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -7,6 +8,7 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback onChangeLanguage;
   final String currentLanguage;
   final ThemeMode currentThemeMode;
+  final bool showExpiredMessage;
 
   const LoginScreen({
     super.key,
@@ -14,6 +16,7 @@ class LoginScreen extends StatefulWidget {
     required this.onChangeLanguage,
     required this.currentLanguage,
     required this.currentThemeMode,
+    this.showExpiredMessage = false,
   });
 
   @override
@@ -27,6 +30,23 @@ class _LoginScreenState extends State<LoginScreen> {
   
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showExpiredMessage) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) showSessionExpiredDialog(context);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   void _handleLogin() async {
     setState(() {
@@ -55,6 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
       });

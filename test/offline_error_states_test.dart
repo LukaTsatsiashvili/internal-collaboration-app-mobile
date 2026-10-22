@@ -66,6 +66,13 @@ class OfflineChats extends ChatService {
   }
 
   @override
+  Future<List<dynamic>> getUsers() async {
+    calls++;
+    if (!connected) throw offline();
+    return [];
+  }
+
+  @override
   Future<void> initSocket(Function(dynamic) onMessageReceived) async {}
 
   @override
@@ -175,6 +182,36 @@ void main() {
     expect(chats.calls, 2);
     expect(find.byKey(const ValueKey('app-load-error-state')), findsNothing);
     expect(find.text('No conversations yet'), findsOneWidget);
+  });
+
+  testWidgets('New conversation distinguishes unavailable colleagues from no results',
+      (tester) async {
+    final chats = OfflineChats();
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: Scaffold(
+        body: Builder(builder: (context) => TextButton(
+          onPressed: () => showDialog<void>(
+            context: context,
+            builder: (_) => NewConversationDialog(service: chats),
+          ),
+          child: const Text('Open dialogue'),
+        )),
+      ),
+    ));
+    await tester.tap(find.text('Open dialogue'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('app-load-error-state')), findsOneWidget);
+    expect(find.text('No colleagues found'), findsNothing);
+    chats.connected = true;
+    final retry = find.byKey(const ValueKey('app-load-error-retry'));
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('app-load-error-state')), findsNothing);
+    expect(find.text('No colleagues found'), findsOneWidget);
   });
 
   testWidgets('Message detail shows Retry instead of pretending chat is empty',

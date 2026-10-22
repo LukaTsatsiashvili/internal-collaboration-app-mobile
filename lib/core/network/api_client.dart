@@ -111,7 +111,6 @@ class ApiClient {
   /// prod /auth/login and /auth/refresh rotate an HttpOnly cookie rather than
   /// returning the refresh credential in JSON. Native Dio does not maintain
   /// browser cookies: capture only our first-party cookie for secure storage.
-  @visibleForTesting
   static String? refreshTokenFromHeaders(Headers headers) {
     final all = headers['set-cookie'] ?? const <String>[];
     for (final header in all) {

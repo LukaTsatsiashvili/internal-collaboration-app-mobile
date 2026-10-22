@@ -66,7 +66,7 @@ class OfflineChats extends ChatService {
   }
 
   @override
-  void initSocket(void Function(dynamic) onMessageReceived) {}
+  Future<void> initSocket(Function(dynamic) onMessageReceived) async {}
 
   @override
   void joinConversation(String conversationId) {}

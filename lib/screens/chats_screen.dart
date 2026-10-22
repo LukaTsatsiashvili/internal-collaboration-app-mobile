@@ -594,7 +594,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   const SizedBox(height: 9),
               itemBuilder: (context, index) =>
                   _buildConversationCard(visible[index]),
-            );
+            ),
+    );
     if (_errorMessage == null) return list;
     return Column(
       children: [

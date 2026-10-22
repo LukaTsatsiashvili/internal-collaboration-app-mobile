@@ -1,47 +1,28 @@
-import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../core/network/api_client.dart';
 
-/// The actual workbook, formula engine, autosave and conflict handling are
-/// shared with the web app. This screen contains only native navigation and
-/// the origin-restricted Flutter <-> Univer bridge.
+/// The deployed prod web app exposes /drive/sheets/:id, not /mobile/sheets/:id.
+/// It owns an independent, cookie-backed browser session inside the WebView.
+/// Native access/refresh tokens must never enter the WebView or its URLs.
 class SpreadsheetScreen extends StatefulWidget {
   const SpreadsheetScreen({super.key, required this.id, required this.name});
 
   final String id;
   final String name;
 
-  /// The editor and REST API must use the same origin. Production and all
-  /// non-loopback hosts require HTTPS. For USB/ADB local development, allow
-  /// HTTP only on a loopback host in Flutter debug builds.
   static Uri editorUri(String id) =>
       editorUriForBaseUrl(id, ApiClient.baseUrl);
 
-  /// An injectable URL builder keeps the local/production security policy
-  /// covered by tests without changing the compile-time API configuration.
-  static Uri editorUriForBaseUrl(
-    String id,
-    String baseUrl, {
-    bool allowDebugLoopbackHttp = kDebugMode,
-  }) {
-    final api = Uri.parse(baseUrl);
-    final isLoopback = api.host == '127.0.0.1' ||
-        api.host == 'localhost' ||
-        api.host == '::1';
-    final isAllowedLocalHttp =
-        allowDebugLoopbackHttp && api.scheme == 'http' && isLoopback;
-    if (api.host.isEmpty || (api.scheme != 'https' && !isAllowedLocalHttp)) {
-      throw StateError(
-        'Spreadsheet editor requires HTTPS except for loopback HTTP in debug mode.',
-      );
+  static Uri editorUriForBaseUrl(String id, String baseUrl) {
+    final uri = Uri.parse(baseUrl);
+    if (uri.scheme != 'https' || uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty || uri.hasQuery || uri.hasFragment) {
+      throw StateError('Spreadsheet editor requires the production HTTPS origin.');
     }
-    return api.replace(
-      pathSegments: ['mobile', 'sheets', id],
+    return uri.replace(
+      pathSegments: ['drive', 'sheets', id],
       query: null,
       fragment: null,
     );
@@ -52,13 +33,14 @@ class SpreadsheetScreen extends StatefulWidget {
 }
 
 class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
-  static const _storage = FlutterSecureStorage();
-
   late final WebViewController _webView;
   bool _pageLoading = true;
+  bool _awaitingWebLogin = false;
+  bool _redirectingToSheet = false;
+  bool _closing = false;
   String? _error;
-  bool _authSent = false;
-  bool _requestingClose = false;
+
+  Uri get _editor => SpreadsheetScreen.editorUri(widget.id);
 
   @override
   void initState() {
@@ -66,31 +48,42 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
     _webView = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.white)
-      ..addJavaScriptChannel(
-        'CollaborationFlutter',
-        onMessageReceived: _onBridgeMessage,
-      )
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
-          // Only the exact first-party workbook page may receive the
-          // in-memory token. Never allow a cross-origin redirect.
           if (!request.isMainFrame) return NavigationDecision.navigate;
           final uri = Uri.tryParse(request.url);
-          final allowed = SpreadsheetScreen.editorUri(widget.id);
-          if (uri?.origin == allowed.origin && uri?.path == allowed.path &&
-              uri?.query.isEmpty == true && uri?.fragment.isEmpty == true) {
+          // Never navigate a top-level embedded browser to a third party.
+          final editor = _editor;
+          if (uri?.scheme == 'https' &&
+              uri?.host == editor.host &&
+              uri?.port == editor.port) {
             return NavigationDecision.navigate;
           }
           return NavigationDecision.prevent;
         },
-        onPageStarted: (_) {
-          _authSent = false;
-          if (mounted) {
-            setState(() {
-              _pageLoading = true;
-              _error = null;
-            });
+        onUrlChange: (change) {
+          final uri = Uri.tryParse(change.url ?? '');
+          if (uri?.origin != _editor.origin) return;
+          if (uri?.path == '/login') {
+            _awaitingWebLogin = true;
+            return;
           }
+          // Prod web sign-in redirects to /dashboard. Return to the
+          // spreadsheet after that browser login; cookies stay in the WebView.
+          if (_awaitingWebLogin && !_redirectingToSheet &&
+              uri?.path == '/dashboard') {
+            _awaitingWebLogin = false;
+            _redirectingToSheet = true;
+            _webView.loadRequest(_editor);
+          }
+          if (uri?.path == _editor.path) _redirectingToSheet = false;
+        },
+        onPageStarted: (_) {
+          if (!mounted) return;
+          setState(() {
+            _pageLoading = true;
+            _error = null;
+          });
         },
         onPageFinished: (_) {
           if (mounted) setState(() => _pageLoading = false);
@@ -99,116 +92,61 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
           if (error.isForMainFrame == true && mounted) {
             setState(() {
               _pageLoading = false;
-              _error = 'Spreadsheet page could not load: ${error.description}';
+              _error = 'ცხრილის გვერდი ვერ ჩაიტვირთა: ${error.description}';
             });
           }
         },
       ))
-      ..loadRequest(SpreadsheetScreen.editorUri(widget.id));
+      ..loadRequest(_editor);
   }
 
-  Future<void> _onBridgeMessage(JavaScriptMessage message) async {
-    Map<String, dynamic> data;
-    try {
-      final decoded = jsonDecode(message.message);
-      if (decoded is! Map) return;
-      data = Map<String, dynamic>.from(decoded);
-    } catch (_) {
-      return;
-    }
-
-    switch (data['type']) {
-      case 'ready':
-        if (_authSent) return;
-        _authSent = true;
-        final token = await _storage.read(key: 'access_token');
-        if (!mounted) return;
-        if (token == null || token.isEmpty) {
-          setState(() => _error = 'Sign in to open this spreadsheet.');
-          return;
-        }
-        // jsonEncode ensures the token cannot escape into executable JS.
-        // Never put this token in a URL, cookie or localStorage.
-        await _webView.runJavaScript(
-          'window.dispatchEvent(new CustomEvent("collab-mobile-session", '
-          '{ detail: { token: ${jsonEncode(token)} } }));',
-        );
-      case 'close':
-        if (mounted) Navigator.of(context).pop();
-    }
-  }
-
-  /// Android system back and predictive-back gestures must take the same
-  /// save/conflict path as the editor's own Back button. Never silently pop
-  /// a live workbook before the JavaScript editor has persisted its changes.
   Future<void> _requestSafeClose() async {
-    if (_requestingClose) return;
-    _requestingClose = true;
+    if (_closing) return;
+    _closing = true;
     try {
-      if (_error == null && _authSent) {
-        final clicked = await _webView.runJavaScriptReturningResult("""
-          (() => {
-            const back = document.querySelector(
-              'button[title="Back to Flutter Drive"]'
-            );
-            if (!back) return false;
-            back.click();
-            return true;
-          })()
-        """);
-        if (!mounted) return;
-        if (clicked == true || clicked.toString() == 'true') {
-          // JS will post {type:"close"} ONLY after the editor has saved.
-          return;
-        }
-      }
-
-      if (!mounted) return;
       final leave = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Close spreadsheet?'),
+          title: const Text('ცხრილის დახურვა'),
           content: const Text(
-            'The editor cannot confirm that all changes were saved. '
-            'Closing now may discard unsaved changes.',
+            'დარწმუნდით, რომ ცხრილში ცვლილებები შენახულია '
+            'ვებრედაქტორის Save ღილაკით. გსურთ დახურვა?',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Keep editing'),
+              child: const Text('გაგრძელება'),
             ),
-            TextButton(
+            FilledButton(
               onPressed: () => Navigator.of(dialogContext).pop(true),
-              child: const Text('Close anyway'),
+              child: const Text('დახურვა'),
             ),
           ],
         ),
       );
       if (mounted && leave == true) Navigator.of(context).pop();
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot request a safe close. Try again.'),
-          ),
-        );
-      }
     } finally {
-      _requestingClose = false;
+      _closing = false;
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _requestSafeClose();
-      },
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Stack(
+  Widget build(BuildContext context) => PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _requestSafeClose();
+        },
+        child: Scaffold(
+          backgroundColor: Colors.white,
+          appBar: AppBar(
+            title: Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: _requestSafeClose,
+              tooltip: 'ცხრილის დახურვა',
+            ),
+          ),
+          body: Stack(
             children: [
               WebViewWidget(controller: _webView),
               if (_pageLoading)
@@ -227,8 +165,8 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
                           Text(_error!, textAlign: TextAlign.center),
                           const SizedBox(height: 14),
                           FilledButton(
-                            onPressed: _requestSafeClose,
-                            child: const Text('Back to Drive'),
+                            onPressed: () => _webView.loadRequest(_editor),
+                            child: const Text('ხელახლა ცდა'),
                           ),
                         ],
                       ),
@@ -238,7 +176,5 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
+      );
 }

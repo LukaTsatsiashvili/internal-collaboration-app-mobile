@@ -2,25 +2,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Flutter - Local Server",
+      "name": "Flutter - Production API",
       "type": "dart",
       "request": "launch",
       "program": "lib/main.dart",
-      "flutterMode": "debug",
-      "preLaunchTask": "ADB Reverse - Local Server",
-      "toolArgs": [
-        "--dart-define=COLLAB_API_BASE_URL=http://127.0.0.1:5173/api/v1"
-      ]
-    },
-    {
-      "name": "Flutter - Production Server",
-      "type": "dart",
-      "request": "launch",
-      "program": "lib/main.dart",
-      "flutterMode": "debug",
-      "toolArgs": [
-        "--dart-define=COLLAB_API_BASE_URL=https://collaboration.gtexshop.ge/api/v1"
-      ]
+      "flutterMode": "debug"
     }
   ]
 }

@@ -1,90 +1,58 @@
-# Native mobile authentication — dev-luka
+# Production authentication — Flutter dev-luka
 
-The Flutter native app and the web app have **different refresh credential transports**
-but use the **same PostgreSQL-backed revocable Session records**.
+## Deployment contract
 
-## Deployment order (required)
+- Single backend: deployed `U-riani/internal-collaboration-app` **prod**.
+- API: `https://collaboration.gtexshop.ge/api/v1` (fixed HTTPS).
+- Flutter is developed and tested on the **dev-luka** mobile branch.
+- No WSL, local Node API, ADB reverse mapping or Flutter API launch override is required.
+- Existing backend endpoints: `POST /auth/login`, `POST /auth/refresh`,
+  `POST /auth/logout`, `GET /auth/me`. **No backend branch change.**
 
-1. Update and restart the **backend** from
-   `U-riani/internal-collaboration-app`, branch `dev-luka`.
-   The new API must expose:
-   - `POST /api/v1/auth/mobile/login`
-   - `POST /api/v1/auth/mobile/refresh`
-   - `POST /api/v1/auth/mobile/logout`
-2. Verify backend routes using the API tests:
-   `npm --prefix apps/api test` (requires a test PostgreSQL database).
-3. Pull `LukaTsatsiashvili/internal-collaboration-app-mobile` `dev-luka`,
-   run `flutter pub get` and `flutter test test/auth_session_test.dart`.
-4. Use **Flutter - Local Server** for local validation and only then select
-   **Flutter - Production Server** when that server has the updated backend.
-   The production launch profile does **not** deploy the API.
+## Native session lifecycle
 
-An older backend without `/auth/mobile/*` is **not compatible** with this
-version of the Flutter client. Do not distribute the updated app before the
-matching backend has been deployed.
+The prod login and refresh endpoints return a short-lived access token in JSON
+and a rotating `collab_refresh_token` in their `Set-Cookie` response header.
+A native Dio HTTP client does not automatically persist that browser cookie.
+Flutter extracts only this first-party refresh-cookie value, keeps it in
+`flutter_secure_storage`, and sends it back in the `Cookie` header only on
+`/auth/refresh` and `/auth/logout`. It is never put in query strings, logs,
+WebViews or ordinary app preferences. All requests use HTTPS.
 
-## Session behavior
+Concurrent access-token expiry results in a single refresh request, replaying
+the failed request only once. When connectivity is lost, the existing credentials
+are retained and startup offers Retry. Definitive refresh-token revocation
+triggers the single session-expired dialog, followed by login.
 
-- Native login returns an access token and a rotating refresh token in JSON,
-  over HTTPS (or ADB/loopback debug HTTP). Both are held in
-  `flutter_secure_storage`. Never log the credentials or put them in URLs.
-- All API services share one Dio client. When an access token expires, only
-  **one** refresh request is attempted for concurrent 401 responses; the
-  original request is retried once with the new access token.
-- A refresh 401/403 means the native session is no longer valid. Tokens are
-  erased; the user sees the unified modal then goes to Login.
-- A transient error (offline, timeout, 429, 5xx) **does not sign out** the user.
-  On cold start the splash screen offers Retry or a deliberate account switch.
-- Native logout revokes that native session on the backend when reachable and
-  erases both local credentials in all cases. Offline logout cannot guarantee
-  remote revocation before server session expiry; avoid sharing the device.
-- The web app retains its original HttpOnly refresh-cookie endpoints. The
-  separate Flutter Spreadsheet WebView session remains managed by the web
-  route and its existing cookie-based authentication.
-- Existing installs have only a legacy access token without a refresh token;
-  they will require **one new sign-in** after upgrading to this mechanism.
+**Migration:** A refresh credential from the previous, non-production native
+endpoint cannot be exchanged against prod. Existing installs may require **one
+new login**. Old mobile refresh credentials are removed on sign-out/new login.
 
-## Offline/reconnect verification (current regression)
+Logout invalidates the prod server session if reachable and always clears native
+credentials. If offline, server revocation is not guaranteed until the existing
+session expires.
 
-- Flutter-side reconnect fix only: **no Web/Backend code changes are required**
-  for this patch. The backend must already support the native mobile API
-  endpoints introduced in the earlier authorization phase.
-- Run `flutter test test/auth_reconnect_test.dart` and
-  `flutter test test/auth_session_test.dart` before device verification.
-- Disconnect mobile Internet while signed in, restart the app and confirm
-  that Retry remains available without deleting saved credentials.
-- Restore Internet **without terminating the app**, select Retry, and verify
-  entry into Dashboard. Then repeat with an expired access token.
-- Choose "სხვა ანგარიშით შესვლა" when offline, re-enable Internet and
-  sign in using the same valid credentials. The login must not reuse stale
-  Authorization headers.
-- If Login displays the local transport warning, verify the running
-  `npm run dev` terminal, `adb devices`, and `adb reverse --list`.
-  ADB reverse is required for the Local Server debug profile.
-- If Login says the mobile API is not installed, update and restart the
-  selected backend branch before retrying. Do not misdiagnose a 404 as
-  incorrect credentials.
-- Login POSTs and refresh-token rotation POSTs must **not** be automatically
-  repeated after a network timeout; automatically retrying these requests
-  risks duplicated sessions or consuming an already-rotated credential.
+## WebView spreadsheets
 
-## Manual regression checklist
+The prod frontend supports `/drive/sheets/:id`, **not** the newer
+`/mobile/sheets/:id` bridge. The mobile editor therefore opens the existing
+HTTPS desktop web page in a WebView with its **own browser session**.
+The first use may require a second web login inside the editor; a successful
+web sign-in redirects to the requested sheet. Browser and native credentials
+are never exchanged in JavaScript. Users should save using the web editor's
+Save button before closing; mobile-first layout/automatic shared login will
+require compatible future prod frontend/backend changes.
 
-- Login with a valid and an invalid password.
-- Stay signed in for more than 15 minutes. Open Tasks, Approvals and Drive.
-- Kill/relaunch the app after the access token expires; user stays signed in.
-- Issue simultaneous requests after token expiry; only one mobile refresh
-  request should occur.
-- Disconnect network; force-close and open the app. Confirm Retry screen
-  rather than an unexpected Login. Reconnect and retry successfully.
-- Revoke a session (or change account password) on the backend; confirm the
-  non-dismissible overlay explanation and Login navigation.
-- Logout and verify `/auth/me` rejects the old access token (server reached).
-- Use both Local and Production launch profiles, ensuring API origins match.
-- Verify spreadsheet opening and web-side session behavior separately.
-- Confirm Messages and Notifications realtime after 15 minutes;
-  **Socket.IO token reauthentication is addressed in the next dedicated
-  realtime stabilization phase**, not by this REST auth change.
+## Validation
 
-Do not assume that source-level and unit tests prove device-level behavior.
-Validate on physical Android/iOS hardware before broad rollout.
+```sh
+flutter pub get
+flutter analyze
+flutter test test/auth_session_test.dart test/auth_reconnect_test.dart
+flutter test test/spreadsheet_editor_url_test.dart
+flutter test
+```
+
+Test login/relogin, one access-token lifetime, offline/reconnect Retry, native
+logout and browser spreadsheet opening on a physical Android device.
+The GitHub Actions workflow runs targeted auth tests on dev-luka updates.

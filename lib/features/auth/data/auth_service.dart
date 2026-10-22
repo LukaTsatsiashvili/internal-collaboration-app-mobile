@@ -7,10 +7,10 @@ enum StartupSessionStatus {
   signedOut,
   expired,
   unavailable,
-  updateRequired,
 }
 
-/// Native login/refresh/logout: web HttpOnly-cookie authentication is unchanged.
+/// Native sign-in uses the existing production web authentication contract.
+/// Refresh cookies are kept as opaque values in OS protected storage.
 class AuthService {
   AuthService({ApiClient? apiClient, AuthSession? session})
       : _apiClient = apiClient ?? ApiClient(),
@@ -22,7 +22,7 @@ class AuthService {
   Future<Map<String, dynamic>?> login(String email, String password) async {
     try {
       final response = await _apiClient.dio.post(
-        '/auth/mobile/login',
+        '/auth/login',
         data: {'email': email, 'password': password},
       );
       final body = response.data;
@@ -31,7 +31,7 @@ class AuthService {
       }
       final data = body['data'] as Map;
       final access = data['accessToken'];
-      final refresh = data['refreshToken'];
+      final refresh = ApiClient.refreshTokenFromHeaders(response.headers);
       if (access is! String || refresh is! String ||
           access.isEmpty || refresh.isEmpty) {
         throw StateError('Missing native session credentials');
@@ -66,9 +66,6 @@ class AuthService {
 
     if (access == null || access.isEmpty) {
       final status = await _apiClient.refreshSession();
-      if (status == AuthRefreshResult.unsupported) {
-        return StartupSessionStatus.updateRequired;
-      }
       if (status == AuthRefreshResult.expired) {
         await _session.clear();
         return StartupSessionStatus.expired;
@@ -88,9 +85,6 @@ class AuthService {
       }
       return StartupSessionStatus.unavailable;
     } on DioException catch (error) {
-      if (error.error is MobileAuthBackendOutdated) {
-        return StartupSessionStatus.updateRequired;
-      }
       // On 401, ApiClient has already attempted the single-flight refresh.
       final remaining = await _session.getRefreshToken();
       if (remaining == null || remaining.isEmpty) {
@@ -127,7 +121,7 @@ class AuthService {
     };
   }
 
-  /// Logout invalidates the server's *native* session if reachable. Local
+  /// Logout invalidates the prod PostgreSQL session via its refresh cookie. Local
   /// credentials are always cleared, even with no network connectivity.
   Future<void> logout() async {
     // Local sign-out must not wait for DNS/HTTP timeouts after network loss.
@@ -137,8 +131,10 @@ class AuthService {
     if (refresh == null || refresh.isEmpty) return;
     try {
       await _apiClient.dio.post(
-        '/auth/mobile/logout',
-        data: {'refreshToken': refresh},
+        '/auth/logout',
+        options: Options(
+          headers: {'Cookie': ApiClient.cookieHeader(refresh)},
+        ),
       ).timeout(const Duration(seconds: 3));
     } catch (_) {
       // Offline logout is always local; remote session expires naturally
@@ -148,11 +144,6 @@ class AuthService {
 
   String _readError(DioException error, String fallback) {
     final status = error.response?.statusCode;
-    final apiPath = error.requestOptions.path;
-    if (status == 404 && apiPath == '/auth/mobile/login') {
-      return 'მობილური ავტორიზაცია ამ სერვერზე ჯერ არ არის განახლებული. '
-          'გთხოვთ დაუკავშირდეთ სისტემის ადმინისტრატორს.';
-    }
     if (status == 401) {
       return 'ელ-ფოსტა ან პაროლი არასწორია.';
     }
@@ -164,14 +155,6 @@ class AuthService {
       return 'სერვერზე დროებითი პრობლემა წარმოიშვა. სცადეთ ხელახლა.';
     }
     if (_isTransientNetworkError(error)) {
-      final target = Uri.tryParse(ApiClient.baseUrl);
-      final isLocal = target?.host == '127.0.0.1' ||
-          target?.host == 'localhost';
-      if (isLocal) {
-        return 'ლოკალურ სერვერთან კავშირი ვერ დამყარდა. '
-            'Local Server რეჟიმში აუცილებელია USB კავშირი და აქტიური '
-            'adb reverse tcp:5173 tcp:5173. მხოლოდ Wi-Fi საკმარისი არ არის.';
-      }
       return 'სერვერთან დაკავშირება ვერ მოხერხდა. '
           'შეამოწმეთ ინტერნეტი და სცადეთ ხელახლა.';
     }

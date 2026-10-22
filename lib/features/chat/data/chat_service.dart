@@ -78,13 +78,10 @@ class ChatService {
       if (response.statusCode == 200 && response.data['success'] == true) {
         return response.data['data'] as List<dynamic>;
       }
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data['error']['message'] ??
-            'ჩათების ჩატვირთვა ვერ მოხერხდა',
-      );
+    } on DioException {
+      rethrow;
     }
-    return [];
+    throw StateError('ჩათების მონაცემები არასწორი ფორმატით დაბრუნდა');
   }
 
   Future<List<dynamic>> getMessages(String conversationId) async {
@@ -95,13 +92,10 @@ class ChatService {
       if (response.statusCode == 200 && response.data['success'] == true) {
         return response.data['data'] as List<dynamic>;
       }
-    } on DioException catch (e) {
-      throw Exception(
-        e.response?.data['error']['message'] ??
-            'შეტყობინებების წამოღება ვერ მოხერხდა',
-      );
+    } on DioException {
+      rethrow;
     }
-    return [];
+    throw StateError('შეტყობინებები არასწორი ფორმატით დაბრუნდა');
   }
 
   // 🔹 ფაილის ატვირთვა სერვერზე (/files ენდპოინტზე)

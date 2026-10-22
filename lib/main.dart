@@ -1,6 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'core/network/auth_session.dart';
 import 'core/widgets/session_expired_dialog.dart';
@@ -70,6 +71,11 @@ class _InternalCollaborationAppState extends State<InternalCollaborationApp>
       _showingExpiredDialog = true;
       try {
         await showSessionExpiredDialog(navigator.context);
+        if (!mounted) return;
+        // The prod spreadsheet browser may have its own cookie session.
+        try {
+          await WebViewCookieManager().clearCookies();
+        } catch (_) {}
         if (!mounted) return;
         navigator.pushAndRemoveUntil(
           MaterialPageRoute<void>(

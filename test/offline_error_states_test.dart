@@ -52,6 +52,19 @@ class OfflineDashboard extends DashboardService {
       {'activeTasks': '0', 'pendingApprovals': '0'};
 }
 
+class OfflineMetrics extends DashboardService {
+  bool connected = false;
+
+  @override
+  Future<Map<String, dynamic>?> getUserProfile() async => {'name': 'User'};
+
+  @override
+  Future<Map<String, dynamic>> getDashboardMetrics() async {
+    if (!connected) throw offline();
+    return {'activeTasks': '4', 'pendingApprovals': '2'};
+  }
+}
+
 class OfflineChats extends ChatService {
   bool connected = false;
   int calls = 0;
@@ -173,6 +186,35 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Previously loaded mention'), findsOneWidget);
     expect(find.byKey(const ValueKey('app-load-error-notice')), findsNothing);
+  });
+
+  testWidgets('Dashboard metrics show offline Error rather than zero',
+      (tester) async {
+    final metrics = OfflineMetrics();
+    final inbox = OfflineInbox()..connected = true;
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: DashboardScreen(
+        onToggleTheme: () {},
+        onChangeLanguage: () {},
+        currentLanguage: 'ka',
+        currentThemeMode: ThemeMode.light,
+        dashboardService: metrics,
+        notificationService: inbox,
+      ),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('dashboard-active-tasks-card')), findsNothing);
+    expect(find.byKey(const ValueKey('app-load-error-state')), findsOneWidget);
+
+    metrics.connected = true;
+    await tester.tap(find.byKey(const ValueKey('app-load-error-retry')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.byKey(const ValueKey('app-load-error-state')), findsNothing);
+    expect(find.byKey(const ValueKey('dashboard-active-tasks-card')), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
   });
 
   testWidgets('Latest Updates shows a compact offline Retry card',

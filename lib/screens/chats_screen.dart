@@ -647,11 +647,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
 class ChatDetailScreen extends StatefulWidget {
   final String conversationId;
   final String chatName;
+  final ChatService? service;
+  final Future<String?> Function()? loadCurrentUserId;
 
   const ChatDetailScreen({
     super.key,
     required this.conversationId,
     required this.chatName,
+    this.service,
+    this.loadCurrentUserId,
   });
 
   @override
@@ -659,7 +663,10 @@ class ChatDetailScreen extends StatefulWidget {
 }
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
-  final ChatService _chatService = ChatService();
+  late final ChatService _chatService;
+  int _loadVersion = 0;
+  String? _loadError;
+  bool _socketInitialized = false;
   final TextEditingController _messageController = TextEditingController();
 
   bool _isLoading = true;
@@ -675,22 +682,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _chatService = widget.service ?? ChatService();
     _initializeChat();
   }
 
   Future<void> _initializeChat() async {
+    final version = ++_loadVersion;
+    if (mounted) setState(() => _isLoading = true);
     try {
-      // The application shell already established the authenticated session.
-      final profile = await _getProfileId();
+      final profile = widget.loadCurrentUserId != null
+          ? await widget.loadCurrentUserId!()
+          : await _getProfileId();
       final messages = await _chatService.getMessages(widget.conversationId);
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
 
       setState(() {
         _currentUserId = profile;
         _messages = messages;
+        _loadError = null;
         _isLoading = false;
       });
 
+      if (_socketInitialized) return;
+      _socketInitialized = true;
       _chatService.joinConversation(widget.conversationId);
 
       _chatService.initSocket((incomingMessage) {
@@ -718,8 +732,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           });
         }
       });
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+    } catch (error) {
+      if (!mounted || version != _loadVersion) return;
+      setState(() {
+        _loadError = loadErrorDescription(error);
+        _isLoading = false;
+      });
     }
   }
 
@@ -1024,6 +1042,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
+    _loadVersion++;
     _chatService.disposeSocket();
     _messageController.dispose();
     super.dispose();
@@ -1039,9 +1058,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           onTap: () => FocusScope.of(context).unfocus(),
           child: Column(
             children: [
+              if (_loadError != null && _messages.isNotEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: AppLoadErrorNotice(onRetry: _initializeChat),
+                ),
+                const SizedBox(height: 6),
+              ],
               Expanded(
-                child: _isLoading
+                child: _isLoading && _messages.isEmpty
                     ? const Center(child: CircularProgressIndicator())
+                    : _loadError != null && _messages.isEmpty
+                    ? Center(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(14),
+                          child: AppLoadErrorState(
+                            description: _loadError,
+                            onRetry: _initializeChat,
+                          ),
+                        ),
+                      )
                     : _messages.isEmpty
                     ? const Center(child: Text('დაიწყეთ საუბარი...'))
                     : ListView.builder(

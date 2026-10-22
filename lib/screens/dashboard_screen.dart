@@ -3,6 +3,7 @@ import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../features/dashboard/data/dashboard_service.dart';
 import '../features/notifications/data/notification_service.dart';
+import '../core/widgets/load_error_state.dart';
 import 'notifications_screen.dart';
 import 'main_navigation.dart';
 
@@ -116,8 +117,7 @@ class _DashboardScreenState extends State<DashboardScreen>
       }
     } catch (error) {
       if (!mounted || version != _updatesVersion) return;
-      setState(() => _updatesError =
-          error.toString().replaceFirst('Exception: ', ''));
+      setState(() => _updatesError = loadErrorDescription(error));
     } finally {
       if (mounted && version == _updatesVersion) {
         setState(() => _updatesLoading = false);
@@ -393,12 +393,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_updatesError != null && _latestUpdates.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(_updatesError!, style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
-              )),
+            AppLoadErrorState(
+              compact: true,
+              description: _updatesError,
+              onRetry: () => _loadUpdates(),
             )
           else if (_latestUpdates.isEmpty)
             Padding(
@@ -406,7 +404,11 @@ class _DashboardScreenState extends State<DashboardScreen>
               child: Text("You're all caught up.",
                 style: TextStyle(color: palette.muted, fontSize: 12)),
             )
-          else
+          else ...[
+            if (_updatesError != null) ...[
+              AppLoadErrorNotice(onRetry: () => _loadUpdates(silent: true)),
+              const SizedBox(height: 10),
+            ],
             for (final item in _latestUpdates) ...[
               Semantics(
                 button: true,

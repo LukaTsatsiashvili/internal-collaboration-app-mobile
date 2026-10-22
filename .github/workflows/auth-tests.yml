@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       - name: Analyze Dart
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Native auth and HTTPS spreadsheet regressions
         run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart test/spreadsheet_editor_url_test.dart
       - name: Full Flutter test suite

@@ -11,7 +11,8 @@ class AuthSession {
   static const _storage = FlutterSecureStorage();
 
   static const accessTokenKey = 'access_token';
-  static const refreshTokenKey = 'mobile_refresh_token';
+  static const refreshTokenKey = 'prod_refresh_cookie';
+  static const _legacyMobileRefreshKey = 'mobile_refresh_token';
 
   /// Incremented only for an authenticated screen whose session was revoked.
   /// The application root owns the single expiration dialog and navigation.
@@ -51,6 +52,7 @@ class AuthSession {
       if (generation != _generation) return;
       await _storage.write(key: refreshTokenKey, value: refreshToken);
       await _storage.write(key: accessTokenKey, value: accessToken);
+      await _storage.delete(key: _legacyMobileRefreshKey);
       _authenticatedScreenActive = true;
     });
   }
@@ -81,6 +83,7 @@ class AuthSession {
     await _serialize(() async {
       // Revoke the renewable credential before the short-lived access token.
       await _storage.delete(key: refreshTokenKey);
+      await _storage.delete(key: _legacyMobileRefreshKey);
       await _storage.delete(key: accessTokenKey);
     });
   }

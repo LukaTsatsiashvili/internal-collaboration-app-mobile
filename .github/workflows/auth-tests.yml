@@ -1,20 +1,20 @@
-name: Flutter authentication regressions
+name: Flutter production compatibility
 
 on:
   push:
     branches: [dev-luka]
     paths:
-      - 'lib/core/network/**'
-      - 'lib/features/auth/**'
-      - 'test/auth_reconnect_test.dart'
-      - 'test/auth_session_test.dart'
+      - 'lib/**'
+      - 'test/**'
+      - '.vscode/launch.json'
+      - 'android/app/src/debug/AndroidManifest.xml'
       - '.github/workflows/auth-tests.yml'
   workflow_dispatch:
 
 jobs:
-  auth-tests:
+  flutter-validation:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -25,5 +25,9 @@ jobs:
           cache: true
       - name: Install dependencies
         run: flutter pub get
-      - name: Offline/online and native auth tests
-        run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart
+      - name: Analyze Dart
+        run: flutter analyze --no-fatal-infos
+      - name: Native auth and HTTPS spreadsheet regressions
+        run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart test/spreadsheet_editor_url_test.dart
+      - name: Full Flutter test suite
+        run: flutter test

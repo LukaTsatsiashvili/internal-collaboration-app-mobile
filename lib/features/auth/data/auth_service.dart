@@ -85,7 +85,7 @@ class AuthService {
         return StartupSessionStatus.authenticated;
       }
       return StartupSessionStatus.unavailable;
-    } on DioException catch (error) {
+    } on DioException {
       // On 401, ApiClient has already attempted the single-flight refresh.
       final remaining = await _session.getRefreshToken();
       if (remaining == null || remaining.isEmpty) {

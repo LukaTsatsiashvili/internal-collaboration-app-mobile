@@ -3,15 +3,11 @@ import 'package:flutter/foundation.dart';
 
 import 'auth_session.dart';
 
-enum AuthRefreshResult { refreshed, expired, unavailable, unsupported }
+enum AuthRefreshResult { refreshed, expired, unavailable }
 
-/// Mobile auth endpoints have not been deployed to the chosen API server.
-class MobileAuthBackendOutdated implements Exception {
-  const MobileAuthBackendOutdated();
-}
-
-/// A shared HTTP client and a single refresh transaction for all modules.
-/// Browser cookie sessions are intentionally NOT used by the native app.
+/// A shared HTTP client with serialized refresh against the deployed
+/// production API. The refresh cookie value is handled as an opaque
+/// credential in platform secure storage; it never enters a WebView or URL.
 class ApiClient {
   ApiClient._internal({Dio? client, Dio? refreshClient}) {
     dio = client ?? Dio(defaultOptions());
@@ -20,7 +16,7 @@ class ApiClient {
     dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         omitContentTypeForBodylessDelete(options);
-        if (!_isMobileAuthPath(options.path)) {
+        if (!_isAuthSessionPath(options.path)) {
           final token = await AuthSession.instance.getAccessToken();
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
@@ -32,7 +28,7 @@ class ApiClient {
       },
       onError: (error, handler) async {
         if (error.response?.statusCode != 401 ||
-            _isMobileAuthPath(error.requestOptions.path)) {
+            _isAuthSessionPath(error.requestOptions.path)) {
           handler.next(error);
           return;
         }
@@ -62,14 +58,6 @@ class ApiClient {
           final result = await _refreshSingleFlight(refreshDio);
           if (result == AuthRefreshResult.refreshed) {
             handler.resolve(await _retry(options));
-            return;
-          }
-          if (result == AuthRefreshResult.unsupported) {
-            handler.reject(DioException(
-              requestOptions: options,
-              type: DioExceptionType.unknown,
-              error: const MobileAuthBackendOutdated(),
-            ));
             return;
           }
           if (result == AuthRefreshResult.expired) {
@@ -108,13 +96,33 @@ class ApiClient {
   late final Dio _refreshClient;
   Future<AuthRefreshResult>? _pendingRefresh;
 
-  static const String baseUrl = String.fromEnvironment(
-    'COLLAB_API_BASE_URL',
-    defaultValue: 'https://collaboration.gtexshop.ge/api/v1',
-  );
+  // Always use the deployed web/backend prod API; no local/ADB profile.
+  static const String baseUrl = 'https://collaboration.gtexshop.ge/api/v1';
+  static const String refreshCookieName = 'collab_refresh_token';
 
-  static bool _isMobileAuthPath(String path) =>
-      path.startsWith('/auth/mobile/');
+  static bool _isAuthSessionPath(String path) =>
+      path == '/auth/login' ||
+      path == '/auth/refresh' ||
+      path == '/auth/logout';
+
+  static String cookieHeader(String refreshToken) =>
+      '$refreshCookieName=$refreshToken';
+
+  /// prod /auth/login and /auth/refresh rotate an HttpOnly cookie rather than
+  /// returning the refresh credential in JSON. Native Dio does not maintain
+  /// browser cookies: capture only our first-party cookie for secure storage.
+  @visibleForTesting
+  static String? refreshTokenFromHeaders(Headers headers) {
+    final all = headers[Headers.setCookieHeader] ?? const <String>[];
+    for (final header in all) {
+      final first = header.split(';').first.trim();
+      if (first.startsWith('$refreshCookieName=')) {
+        final value = first.substring(refreshCookieName.length + 1);
+        if (value.isNotEmpty) return value;
+      }
+    }
+    return null;
+  }
 
   static String? _bearerToken(dynamic header) {
     if (header is! String || !header.startsWith('Bearer ')) return null;
@@ -168,8 +176,10 @@ class ApiClient {
       final generation = session.generation;
 
       final response = await client.post<dynamic>(
-        '/auth/mobile/refresh',
-        data: {'refreshToken': priorRefresh},
+        '/auth/refresh',
+        options: Options(headers: {
+          'Cookie': cookieHeader(priorRefresh),
+        }),
       );
       final body = response.data;
       if (body is! Map || body['success'] != true || body['data'] is! Map) {
@@ -177,7 +187,7 @@ class ApiClient {
       }
       final data = body['data'] as Map;
       final newAccess = data['accessToken'];
-      final newRefresh = data['refreshToken'];
+      final newRefresh = refreshTokenFromHeaders(response.headers);
       if (newAccess is! String || newRefresh is! String ||
           newAccess.isEmpty || newRefresh.isEmpty) {
         return AuthRefreshResult.unavailable;
@@ -191,9 +201,8 @@ class ApiClient {
       return saved ? AuthRefreshResult.refreshed : AuthRefreshResult.expired;
     } on DioException catch (error) {
       final status = error.response?.statusCode;
-      // Invalid/consumed credentials are final. Server overload, 5xx,
+      // Invalid/consumed cookies are final. Server overload, 5xx,
       // connection loss and timeouts are transient, never forced logout.
-      if (status == 404) return AuthRefreshResult.unsupported;
       if (status == 400 || status == 401 || status == 403) {
         return AuthRefreshResult.expired;
       }

@@ -113,7 +113,7 @@ class ApiClient {
   /// browser cookies: capture only our first-party cookie for secure storage.
   @visibleForTesting
   static String? refreshTokenFromHeaders(Headers headers) {
-    final all = headers[Headers.setCookieHeader] ?? const <String>[];
+    final all = headers['set-cookie'] ?? const <String>[];
     for (final header in all) {
       final first = header.split(';').first.trim();
       if (first.startsWith('$refreshCookieName=')) {

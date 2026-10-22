@@ -12,7 +12,6 @@ import 'package:gtex_collab_app/features/auth/data/auth_service.dart';
 /// pipeline therefore handles HTTP 401/404 exactly as it does on a device.
 class _ConnectivityBackend implements HttpClientAdapter {
   bool online = false;
-  bool mobileRoutesInstalled = true;
   bool credentialsAccepted = true;
   int refreshRequests = 0;
   int loginRequests = 0;
@@ -38,19 +37,19 @@ class _ConnectivityBackend implements HttpClientAdapter {
       );
     }
 
-    if (options.path == '/auth/mobile/login') {
+    if (options.path == '/auth/login') {
       loginRequests++;
-      if (!mobileRoutesInstalled) return _error(404);
       if (!credentialsAccepted) return _error(401);
       validAccess = 'access-from-login';
       validRefresh = 'refresh-from-login';
       return _ok({
         'accessToken': validAccess,
-        'refreshToken': validRefresh,
         'user': {'id': 'employee-1'},
-      });
+      }, cookie: validRefresh);
     }
-    if (options.path == '/auth/mobile/logout') {
+    if (options.path == '/auth/logout') {
+      final cookie = options.headers['Cookie'];
+      if (cookie != ApiClient.cookieHeader(validRefresh)) return _error(401);
       return _ok(null);
     }
     if (options.path == '/auth/me') {
@@ -58,27 +57,26 @@ class _ConnectivityBackend implements HttpClientAdapter {
       if (authorization != 'Bearer $validAccess') return _error(401);
       return _ok({'id': 'employee-1'});
     }
-    if (options.path == '/auth/mobile/refresh') {
+    if (options.path == '/auth/refresh') {
       refreshRequests++;
-      if (!mobileRoutesInstalled) return _error(404);
-      final body = options.data;
-      if (body is! Map || body['refreshToken'] != validRefresh) {
+      if (options.headers['Cookie'] !=
+          ApiClient.cookieHeader(validRefresh)) {
         return _error(401);
       }
       validRefresh = 'refresh-rotated-$refreshRequests';
       validAccess = 'access-refreshed-$refreshRequests';
       return _ok({
         'accessToken': validAccess,
-        'refreshToken': validRefresh,
         'user': {'id': 'employee-1'},
-      });
+      }, cookie: validRefresh);
     }
     return _error(404);
   }
 
-  static ResponseBody _ok(Object? data) => _response(
+  static ResponseBody _ok(Object? data, {String? cookie}) => _response(
         200,
         {'success': true, 'data': data},
+        cookie: cookie,
       );
 
   static ResponseBody _error(int status) => _response(
@@ -89,12 +87,20 @@ class _ConnectivityBackend implements HttpClientAdapter {
         },
       );
 
-  static ResponseBody _response(int status, Map<String, dynamic> data) =>
+  static ResponseBody _response(
+    int status,
+    Map<String, dynamic> data, {
+    String? cookie,
+  }) =>
       ResponseBody.fromString(
         jsonEncode(data),
         status,
         headers: {
           Headers.contentTypeHeader: ['application/json'],
+          if (cookie != null)
+            Headers.setCookieHeader: [
+              'collab_refresh_token=$cookie; Path=/api/v1/auth; Secure; HttpOnly; SameSite=Strict',
+            ],
         },
       );
 
@@ -157,20 +163,7 @@ void main() {
     expect(await auth.checkSession(), StartupSessionStatus.authenticated);
   });
 
-  test('an outdated backend is not incorrectly reported as lost Internet',
-      () async {
-    await session.saveLogin(
-      accessToken: 'expired-access',
-      refreshToken: 'refresh-original',
-    );
-    backend.online = true;
-    backend.mobileRoutesInstalled = false;
-
-    expect(await auth.checkSession(), StartupSessionStatus.updateRequired);
-    expect(await session.getRefreshToken(), 'refresh-original');
-  });
-
-  test('login distinguishes offline, outdated API and invalid credentials',
+  test('login distinguishes offline and invalid credentials',
       () async {
     backend.online = false;
     await expectLater(
@@ -181,13 +174,6 @@ void main() {
     expect(await session.getRefreshToken(), isNull);
 
     backend.online = true;
-    backend.mobileRoutesInstalled = false;
-    await expectLater(
-      auth.login('employee@example.com', 'CorrectPassword!'),
-      throwsA(predicate((e) => e.toString().contains('განახლებული'))),
-    );
-
-    backend.mobileRoutesInstalled = true;
     backend.credentialsAccepted = false;
     await expectLater(
       auth.login('employee@example.com', 'WrongPassword!'),

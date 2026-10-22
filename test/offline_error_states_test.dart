@@ -142,7 +142,12 @@ void main() {
     expect(find.byKey(const ValueKey('dashboard-latest-updates')), findsOneWidget);
     expect(find.byKey(const ValueKey('app-load-error-state')), findsOneWidget);
     inbox.connected = true;
-    await tester.tap(find.byKey(const ValueKey('app-load-error-retry')));
+    // Latest Updates is below the dashboard metric cards; scroll it into
+    // the test viewport before performing a real hit-tested tap.
+    final retry = find.byKey(const ValueKey('app-load-error-retry'));
+    await tester.ensureVisible(retry);
+    await tester.pump();
+    await tester.tap(retry);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byKey(const ValueKey('app-load-error-state')), findsNothing);

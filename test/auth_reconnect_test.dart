@@ -98,7 +98,7 @@ class _ConnectivityBackend implements HttpClientAdapter {
         headers: {
           Headers.contentTypeHeader: ['application/json'],
           if (cookie != null)
-            Headers.setCookieHeader: [
+            'set-cookie': [
               'collab_refresh_token=$cookie; Path=/api/v1/auth; Secure; HttpOnly; SameSite=Strict',
             ],
         },

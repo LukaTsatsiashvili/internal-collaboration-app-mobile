@@ -20,6 +20,7 @@ class OfflineInbox extends NotificationService {
   bool connected = false;
   int calls = 0;
   List<Map<String, dynamic>> items = [];
+  void Function()? onRefresh;
 
   @override
   Future<NotificationInbox> getInbox() async {
@@ -32,10 +33,14 @@ class OfflineInbox extends NotificationService {
   }
 
   @override
-  Future<void> connect(void Function() refresh) async {}
+  Future<void> connect(void Function() refresh) async {
+    onRefresh = refresh;
+  }
 
   @override
-  void disposeSocket() {}
+  void disposeSocket() {
+    onRefresh = null;
+  }
 }
 
 class OfflineDashboard extends DashboardService {
@@ -128,6 +133,46 @@ void main() {
     expect(inbox.calls, greaterThanOrEqualTo(2));
     expect(find.byKey(const ValueKey('app-load-error-state')), findsNothing);
     expect(find.text('შეტყობინებები არ მოიძებნა'), findsOneWidget);
+  });
+
+  testWidgets('Notifications preserves cached records after a refresh fails',
+      (tester) async {
+    final inbox = OfflineInbox()
+      ..connected = true
+      ..items = [
+        {
+          'id': 'saved-1',
+          'type': 'MENTION',
+          'title': 'Previously loaded mention',
+          'body': 'Already received',
+          'createdAt': '2026-10-21T10:00:00Z',
+          'isRead': false,
+        },
+      ];
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.dark,
+      home: NotificationsScreen(service: inbox),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Previously loaded mention'), findsOneWidget);
+
+    inbox.connected = false;
+    inbox.onRefresh?.call();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Previously loaded mention'), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-load-error-notice')), findsOneWidget);
+
+    inbox.connected = true;
+    await tester.tap(find.descendant(
+      of: find.byKey(const ValueKey('app-load-error-notice')),
+      matching: find.text('ხელახლა ცდა'),
+    ));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Previously loaded mention'), findsOneWidget);
+    expect(find.byKey(const ValueKey('app-load-error-notice')), findsNothing);
   });
 
   testWidgets('Latest Updates shows a compact offline Retry card',

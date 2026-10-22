@@ -26,7 +26,6 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   final AuthService _authService = AuthService();
   bool _unavailable = false;
-  bool _requiresBackendUpdate = false;
   bool _checking = false;
 
   @override
@@ -40,7 +39,6 @@ class _SplashScreenState extends State<SplashScreen> {
     setState(() {
       _checking = true;
       _unavailable = false;
-      _requiresBackendUpdate = false;
     });
 
     StartupSessionStatus result;
@@ -51,12 +49,10 @@ class _SplashScreenState extends State<SplashScreen> {
     }
     if (!mounted) return;
 
-    if (result == StartupSessionStatus.unavailable ||
-        result == StartupSessionStatus.updateRequired) {
+    if (result == StartupSessionStatus.unavailable) {
       setState(() {
         _checking = false;
         _unavailable = true;
-        _requiresBackendUpdate = result == StartupSessionStatus.updateRequired;
       });
       return;
     }
@@ -116,25 +112,17 @@ class _SplashScreenState extends State<SplashScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(_requiresBackendUpdate
-                    ? Icons.system_update_alt_rounded
-                    : _unavailable ? Icons.wifi_off_rounded : Icons.hub,
+                Icon(_unavailable ? Icons.wifi_off_rounded : Icons.hub,
                     size: 72, color: Theme.of(context).colorScheme.primary),
                 const SizedBox(height: 22),
                 if (_unavailable) ...[
-                  Text(_requiresBackendUpdate
-                      ? 'სერვერის განახლებაა საჭირო'
-                      : 'სერვერთან დაკავშირება ვერ მოხერხდა',
+                  const Text('სერვერთან დაკავშირება ვერ მოხერხდა',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 12),
-                  Text(
-                    _requiresBackendUpdate
-                        ? 'ამ სერვერს მობილური ავტორიზაციის ახალი API ჯერ არ აქვს. '
-                          'დაუკავშირდით სისტემის ადმინისტრატორს. '
-                          'თქვენი სესია არ გაუქმებულა.'
-                        : 'შეამოწმეთ ინტერნეტი და სცადეთ ხელახლა. '
-                          'თქვენი სესია არ გაუქმებულა.',
+                  const Text(
+                    'შეამოწმეთ ინტერნეტი და სცადეთ ხელახლა. '
+                    'თქვენი სესია არ გაუქმებულა.',
                     textAlign: TextAlign.center,
                   ),
                   if (kDebugMode) ...[

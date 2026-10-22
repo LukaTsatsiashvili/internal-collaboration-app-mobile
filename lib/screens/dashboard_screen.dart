@@ -51,6 +51,8 @@ class _DashboardScreenState extends State<DashboardScreen>
   int _updatesVersion = 0;
 
   bool _isLoading = true;
+  bool _hasMetrics = false;
+  String? _metricsError;
   String _userName = 'მომხმარებელი';
   String _activeTasksCount = '...';
   String _pendingApprovalsCount = '...';
@@ -143,6 +145,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Future<void> _loadDashboardData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -156,7 +159,13 @@ class _DashboardScreenState extends State<DashboardScreen>
           }
           _activeTasksCount = metrics['activeTasks'] ?? '0';
           _pendingApprovalsCount = metrics['pendingApprovals'] ?? '0';
+          _hasMetrics = true;
+          _metricsError = null;
         });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _metricsError = loadErrorDescription(error));
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -206,12 +215,24 @@ class _DashboardScreenState extends State<DashboardScreen>
               ),
             ),
             const SizedBox(height: 21),
-            _isLoading
+            _isLoading && !_hasMetrics
                 ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 42),
                     child: Center(child: CircularProgressIndicator()),
                   )
-                : Row(
+                : _metricsError != null && !_hasMetrics
+                ? AppLoadErrorState(
+                    compact: true,
+                    description: _metricsError,
+                    onRetry: _loadDashboardData,
+                  )
+                : Column(
+                    children: [
+                      if (_metricsError != null) ...[
+                        AppLoadErrorNotice(onRetry: _loadDashboardData),
+                        const SizedBox(height: 10),
+                      ],
+                      Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
@@ -235,6 +256,8 @@ class _DashboardScreenState extends State<DashboardScreen>
                           cardKey: const ValueKey('dashboard-pending-approvals-card'),
                         ),
                       ),
+                    ],
+                  ),
                     ],
                   ),
             const SizedBox(height: 22),

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/auth_session.dart';
 
@@ -128,6 +129,12 @@ class AuthService {
     // Revoke the captured credential on the server as a bounded best effort.
     final refresh = await _session.getRefreshToken();
     await _session.clear();
+    // The embedded prod website may own a separate browser-cookie session.
+    // Clearing it prevents the next native account from inheriting its browser
+    // login on this device. Platform integration may be absent in unit tests.
+    try {
+      await WebViewCookieManager().clearCookies();
+    } catch (_) {}
     if (refresh == null || refresh.isEmpty) return;
     try {
       await _apiClient.dio.post(

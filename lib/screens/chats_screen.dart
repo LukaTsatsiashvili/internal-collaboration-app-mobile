@@ -1679,14 +1679,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 }
 
 class NewConversationDialog extends StatefulWidget {
-  const NewConversationDialog({super.key});
+  const NewConversationDialog({super.key, this.service});
+
+  final ChatService? service;
 
   @override
   State<NewConversationDialog> createState() => _NewConversationDialogState();
 }
 
 class _NewConversationDialogState extends State<NewConversationDialog> {
-  final ChatService _chatService = ChatService();
+  late final ChatService _chatService;
+  int _usersRequestVersion = 0;
+  String? _usersLoadError;
   final TextEditingController _groupNameController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   // Independent search terms prevent Direct/Group switching from resetting filters.
@@ -1706,23 +1710,33 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
   @override
   void initState() {
     super.initState();
+    _chatService = widget.service ?? ChatService();
     _loadUsers();
   }
 
   Future<void> _loadUsers() async {
+    final version = ++_usersRequestVersion;
+    if (mounted) setState(() => _isLoadingUsers = true);
     try {
       final users = await _chatService.getUsers();
+      if (!mounted || version != _usersRequestVersion) return;
       setState(() {
         _users = users;
-        _isLoadingUsers = false;
+        _usersLoadError = null;
       });
-    } catch (_) {
-      setState(() => _isLoadingUsers = false);
+    } catch (error) {
+      if (!mounted || version != _usersRequestVersion) return;
+      setState(() => _usersLoadError = loadErrorDescription(error));
+    } finally {
+      if (mounted && version == _usersRequestVersion) {
+        setState(() => _isLoadingUsers = false);
+      }
     }
   }
 
   @override
   void dispose() {
+    _usersRequestVersion++;
     _groupNameController.dispose();
     _searchController.dispose();
     _directSearchController.dispose();
@@ -2092,8 +2106,16 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
         borderRadius: BorderRadius.circular(17),
         border: Border.all(color: p.cardBorder),
       ),
-      child: _isLoadingUsers
+      child: _isLoadingUsers && _users.isEmpty
           ? const Center(child: CircularProgressIndicator())
+          : _usersLoadError != null && _users.isEmpty
+          ? SingleChildScrollView(
+              child: AppLoadErrorState(
+                compact: true,
+                description: _usersLoadError,
+                onRetry: _loadUsers,
+              ),
+            )
           : visible.isEmpty
               ? Center(
                   child: Text(

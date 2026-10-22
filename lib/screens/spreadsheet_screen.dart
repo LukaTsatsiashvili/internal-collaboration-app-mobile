@@ -145,6 +145,17 @@ class _SpreadsheetScreenState extends State<SpreadsheetScreen> {
               onPressed: _requestSafeClose,
               tooltip: 'ცხრილის დახურვა',
             ),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.table_chart_outlined),
+                tooltip: 'ცხრილზე დაბრუნება',
+                onPressed: () async {
+                  final current = Uri.tryParse(await _webView.currentUrl() ?? '');
+                  if (!mounted || current?.path == _editor.path) return;
+                  await _webView.loadRequest(_editor);
+                },
+              ),
+            ],
           ),
           body: Stack(
             children: [

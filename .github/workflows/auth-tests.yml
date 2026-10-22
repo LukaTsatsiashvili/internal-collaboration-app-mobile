@@ -31,3 +31,20 @@ jobs:
         run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart test/spreadsheet_editor_url_test.dart
       - name: Full Flutter test suite
         run: flutter test
+
+  baseline-comparison:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5094edb0b2e22ddd9de525c5a38512fbfd598bac
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Check full tests on unchanged pre-migration commit
+        run: flutter test

@@ -11,13 +11,22 @@ import 'package:open_filex/open_filex.dart';
 
 import '../features/chat/data/chat_service.dart';
 import '../core/network/api_client.dart';
+import '../core/widgets/load_error_state.dart';
 
 // Stitch-inspired messages list. The chat detail, dialog, and networking stay unchanged.
 class ChatsScreen extends StatefulWidget {
-  const ChatsScreen({super.key, this.openCreateOnStart = false});
+  const ChatsScreen({
+    super.key,
+    this.openCreateOnStart = false,
+    this.service,
+    this.loadCurrentUserId,
+  });
 
   /// Dashboard quick action opens the existing conversation dialog.
   final bool openCreateOnStart;
+  /// Testable source; regular screens use the standard authenticated service.
+  final ChatService? service;
+  final Future<String?> Function()? loadCurrentUserId;
 
   @override
   State<ChatsScreen> createState() => _ChatsScreenState();
@@ -42,7 +51,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Color get _surfaceShadow => _palette.panelShadow;
   static const Color _blue = AppColors.primary;
 
-  final ChatService _chatService = ChatService();
+  late final ChatService _chatService;
+  int _loadVersion = 0;
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
@@ -54,6 +64,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   void initState() {
     super.initState();
+    _chatService = widget.service ?? ChatService();
     _loadData();
     if (widget.openCreateOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -64,6 +75,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   void dispose() {
+    _loadVersion++;
     _searchController.dispose();
     super.dispose();
   }
@@ -71,32 +83,37 @@ class _ChatsScreenState extends State<ChatsScreen> {
   // Preserve the existing user/conversation API and its ordering.
   Future<void> _loadData() async {
     if (!mounted) return;
+    final version = ++_loadVersion;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final profileResponse = await ApiClient().dio.get('/auth/me');
-      if (profileResponse.statusCode == 200 &&
-          profileResponse.data['success'] == true) {
-        _currentUserId = profileResponse.data['data']['id'];
+      String? currentUserId;
+      if (widget.loadCurrentUserId != null) {
+        currentUserId = await widget.loadCurrentUserId!();
+      } else {
+        final profileResponse = await ApiClient().dio.get('/auth/me');
+        if (profileResponse.statusCode == 200 &&
+            profileResponse.data['success'] == true) {
+          currentUserId = profileResponse.data['data']['id']?.toString();
+        }
       }
       final chats = await _chatService.getConversations();
-      if (!mounted) return;
+      if (!mounted || version != _loadVersion) return;
       setState(() {
+        _currentUserId = currentUserId;
         _chats = chats;
       });
-    } catch (e) {
-      if (!mounted) return;
+    } catch (error) {
+      if (!mounted || version != _loadVersion) return;
       setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        _errorMessage = loadErrorDescription(error);
       });
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      if (mounted && version == _loadVersion) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -534,32 +551,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Widget _buildConversationList() {
-    if (_isLoading) {
+    if (_isLoading && _chats.isEmpty) {
       return const Center(child: CircularProgressIndicator(color: _blue));
     }
-    if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.wifi_off_rounded, color: _muted, size: 30),
-              const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFFB83C52)),
-              ),
-              TextButton(onPressed: _loadData, child: const Text('Retry')),
-            ],
-          ),
+    if (_errorMessage != null && _chats.isEmpty) {
+      return SingleChildScrollView(
+        child: AppLoadErrorState(
+          description: _errorMessage,
+          onRetry: _loadData,
         ),
       );
     }
 
     final visible = _visibleChats;
-    return RefreshIndicator(
+    final list = RefreshIndicator(
       color: _blue,
       onRefresh: _loadData,
       child: visible.isEmpty
@@ -589,7 +594,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   const SizedBox(height: 9),
               itemBuilder: (context, index) =>
                   _buildConversationCard(visible[index]),
-            ),
+            );
+    if (_errorMessage == null) return list;
+    return Column(
+      children: [
+        AppLoadErrorNotice(onRetry: _loadData),
+        const SizedBox(height: 9),
+        Expanded(child: list),
+      ],
     );
   }
 

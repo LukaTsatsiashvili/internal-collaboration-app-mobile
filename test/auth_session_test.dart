@@ -96,6 +96,28 @@ void main() {
     expect(session.expiredRevision.value, baseline + 1);
   });
 
+  test('production login extracts only the rotating auth cookie', () {
+    final headers = Headers.fromMap({
+      'set-cookie': [
+        'theme=dark; Path=/',
+        'collab_refresh_token=opaque-rotation-123; Path=/api/v1/auth; '
+            'HttpOnly; Secure; SameSite=Strict',
+      ],
+    });
+    expect(ApiClient.refreshTokenFromHeaders(headers), 'opaque-rotation-123');
+    expect(
+      ApiClient.refreshTokenFromHeaders(
+        Headers.fromMap({'set-cookie': ['theme=dark; Path=/']}),
+      ),
+      isNull,
+    );
+    expect(
+      ApiClient.cookieHeader('opaque-rotation-123'),
+      'collab_refresh_token=opaque-rotation-123',
+    );
+    expect(ApiClient.baseUrl, 'https://collaboration.gtexshop.ge/api/v1');
+  });
+
   test('bodyless DELETE never carries a misleading JSON content type', () {
     final options = RequestOptions(
       path: '/drive/123',

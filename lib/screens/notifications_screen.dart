@@ -9,6 +9,7 @@ import 'approvals_screen.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
+import '../core/widgets/load_error_state.dart';
 
 
 class NotificationsScreen extends StatefulWidget {
@@ -111,7 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen>
     } catch (error) {
       if (!mounted || version != _requestVersion) return;
       setState(() {
-        _error = error.toString().replaceFirst('Exception: ', '');
+        _error = loadErrorDescription(error);
       });
     } finally {
       if (mounted && version == _requestVersion) {
@@ -406,15 +407,19 @@ class _NotificationsScreenState extends State<NotificationsScreen>
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(13, 13, 13, 25),
             children: [
+              if (_error != null && _items.isNotEmpty) ...[
+                AppLoadErrorNotice(onRetry: () => _load(silent: true)),
+                const SizedBox(height: 12),
+              ],
               if (_loading && _items.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(30),
                   child: Center(child: CircularProgressIndicator()),
                 )
               else if (_error != null && _items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(child: Text(_error!, textAlign: TextAlign.center)),
+                AppLoadErrorState(
+                  description: _error,
+                  onRetry: () => _load(),
                 )
               else if (_visibleItems.isEmpty)
                 const Padding(

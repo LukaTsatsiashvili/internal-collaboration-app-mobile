@@ -39,7 +39,8 @@ class DashboardService {
         'pendingApprovals': pendingApprovals.toString(),
       };
     } catch (_) {
-      return {'activeTasks': '0', 'pendingApprovals': '0'};
+      // An unavailable API is not evidence of zero active tasks or approvals.
+      rethrow;
     }
   }
 }

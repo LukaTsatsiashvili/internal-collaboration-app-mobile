@@ -1206,6 +1206,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   right: -2,
                   bottom: -2,
                   child: Container(
+                    key: const ValueKey('chat-detail-online-dot'),
                     width: 12,
                     height: 12,
                     decoration: BoxDecoration(
@@ -1234,27 +1235,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     fontSize: 14,
                   ),
                 ),
-                if (widget.isGroup || widget.isOnline != null) ...[
+                // Online presence is already represented by the avatar dot.
+                // Keep the group-only caption; direct chats need no subtitle.
+                if (widget.isGroup) ...[
                   const SizedBox(height: 3),
-                  Row(
-                    children: [
-                      if (online && !widget.isGroup) ...[
-                        const Icon(Icons.circle, color: AppColors.success, size: 6),
-                        const SizedBox(width: 5),
-                      ],
-                      Text(
-                        widget.isGroup
-                            ? 'ჯგუფური საუბარი'
-                            : online ? 'Active now' : 'Offline',
-                        key: const ValueKey('chat-detail-presence'),
-                        style: TextStyle(
-                          color: online && !widget.isGroup
-                              ? AppColors.success : palette.muted,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'ჯგუფური საუბარი',
+                    key: const ValueKey('chat-detail-presence'),
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ],
               ],
@@ -1937,7 +1929,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 key: const ValueKey('chat-detail-composer-area'),
                 decoration: BoxDecoration(
                   color: palette.panel,
-                  border: Border(top: BorderSide(color: palette.cardBorder)),
+                  // Separate the composer from the bottom navigation only.
+                  border: Border(
+                    bottom: BorderSide(color: palette.cardBorder),
+                  ),
                 ),
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
                 child: Container(

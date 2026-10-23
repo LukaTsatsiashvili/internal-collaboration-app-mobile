@@ -1291,6 +1291,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       body: SafeArea(
         top: false,
         child: DecoratedBox(
+          key: const ValueKey('chat-detail-canvas'),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -1927,9 +1928,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               // and editing/reply state remain exactly the same.
               Container(
                 key: const ValueKey('chat-detail-composer-area'),
+                // No surface fill here: the SAME shared gradient must remain
+                // visible behind messages and beneath the composer in both
+                // app themes. Only the bottom navigation gets a separator.
                 decoration: BoxDecoration(
-                  color: palette.panel,
-                  // Separate the composer from the bottom navigation only.
                   border: Border(
                     bottom: BorderSide(color: palette.cardBorder),
                   ),

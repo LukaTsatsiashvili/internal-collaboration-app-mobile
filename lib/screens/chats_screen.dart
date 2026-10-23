@@ -1126,6 +1126,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: available),
                     child: SingleChildScrollView(
+                      // Allow touches in the empty horizontal space around
+                      // the floating cards to reach the dismissing backdrop.
+                      hitTestBehavior: HitTestBehavior.deferToChild,
                       child: Column(
                         crossAxisAlignment: me
                             ? CrossAxisAlignment.end

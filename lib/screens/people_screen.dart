@@ -200,9 +200,9 @@ class _PeopleScreenState extends State<PeopleScreen>
     Expanded(child: Container(
       height: 47,
       decoration: BoxDecoration(
+        // Match the single-layer rounded search field from Messages.
         color: p.searchBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: p.cardBorder),
       ),
       child: TextField(
         key: const ValueKey('people-search'),
@@ -211,6 +211,9 @@ class _PeopleScreenState extends State<PeopleScreen>
         textInputAction: TextInputAction.search,
         style: TextStyle(color: p.ink, fontSize: 13),
         decoration: InputDecoration(
+          // The shared ThemeData fills inputs by default, which creates a
+          // second rectangular surface inside our rounded search container.
+          filled: false,
           hintText: 'Search people...',
           hintStyle: TextStyle(color: p.hintText, fontSize: 12),
           prefixIcon: Icon(Icons.search_rounded, color: p.searchIcon, size: 19),
@@ -273,7 +276,6 @@ class _PeopleScreenState extends State<PeopleScreen>
           const SizedBox(width: 9),
           Expanded(child: Text(value, overflow: TextOverflow.ellipsis,
             style: TextStyle(color: p.secondaryText, fontSize: 11.5))),
-          Icon(Icons.open_in_new_rounded, size: 13, color: p.muted),
         ]),
       ),
     ),
@@ -426,9 +428,6 @@ class _PeopleScreenState extends State<PeopleScreen>
                 Text('People', key: const ValueKey('people-header'),
                   style: TextStyle(color: p.ink, fontSize: 23,
                     fontWeight: FontWeight.w800, letterSpacing: -0.75)),
-                const SizedBox(height: 4),
-                Text('Employee directory',
-                  style: TextStyle(color: p.secondaryText, fontSize: 11.5)),
               ]),
           ),
         ),

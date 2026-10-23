@@ -28,7 +28,7 @@ jobs:
       - name: Analyze Dart
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Native auth and HTTPS spreadsheet regressions
-        run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart test/spreadsheet_editor_url_test.dart test/offline_error_states_test.dart
+        run: flutter test test/auth_reconnect_test.dart test/auth_session_test.dart test/spreadsheet_editor_url_test.dart test/offline_load_states_test.dart test/offline_error_states_test.dart
       # The pre-migration baseline had the same 22 unrelated failing tests.
       # Keep this suite visible but do not block the production auth checks.
       - name: Full Flutter test suite (existing baseline failures reported)

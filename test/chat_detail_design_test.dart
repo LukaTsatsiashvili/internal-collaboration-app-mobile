@@ -104,6 +104,20 @@ void main() {
       expect(composerBorder.top, BorderSide.none);
       expect(composerBorder.bottom.color, palette.cardBorder);
 
+      // There must be no separate panel fill behind the input: the
+      // message list and composer share this one uninterrupted canvas.
+      expect(composerDecoration.color, isNull);
+      expect(composerDecoration.gradient, isNull);
+      final canvas = tester.widget<DecoratedBox>(
+          find.byKey(const ValueKey('chat-detail-canvas')));
+      final background = (canvas.decoration as BoxDecoration).gradient!
+          as LinearGradient;
+      expect(background.colors, [
+        palette.page,
+        palette.unreadBackground.withValues(alpha: 0.65),
+        palette.page,
+      ]);
+
       final incoming = tester.widget<Container>(
           find.byKey(const ValueKey('chat-bubble-incoming')));
       final outgoing = tester.widget<Container>(

@@ -1551,7 +1551,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                               children: [
                                                 Text(
                                                   repliedSenderName,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.bold,
                                                     color: isMe ? Colors.white
@@ -1565,7 +1565,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                   maxLines: 1,
                                                   overflow:
                                                       TextOverflow.ellipsis,
-                                                  style: const TextStyle(
+                                                  style: TextStyle(
                                                     fontSize: 11,
                                                     color: isMe
                                                         ? Colors.white70
@@ -1648,7 +1648,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                         Text(
                                                           fileName,
                                                           style:
-                                                              const TextStyle(
+                                                              TextStyle(
                                                                 color: palette.ink,
                                                                 fontWeight:
                                                                     FontWeight
@@ -1663,7 +1663,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                           Text(
                                                             fileSize,
                                                             style:
-                                                                const TextStyle(
+                                                                TextStyle(
                                                                   color: palette.muted,
                                                                   fontSize: 11,
                                                                 ),

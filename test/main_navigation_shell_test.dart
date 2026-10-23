@@ -6,6 +6,7 @@ import 'package:gtex_collab_app/screens/approvals_screen.dart';
 import 'package:gtex_collab_app/screens/main_navigation.dart';
 import 'package:gtex_collab_app/screens/notifications_screen.dart';
 import 'package:gtex_collab_app/screens/tasks_screen.dart';
+import 'package:gtex_collab_app/screens/people_screen.dart';
 
 class FakeShellNotificationService extends NotificationService {
   bool read = false;
@@ -39,6 +40,32 @@ class FakeShellNotificationService extends NotificationService {
 }
 
 void main() {
+  testWidgets('People is a sixth shell tab and keeps floating navigation',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.light,
+      home: MainNavigationScreen(
+        onToggleTheme: () {},
+        onChangeLanguage: () {},
+        currentLanguage: 'ka',
+        currentThemeMode: ThemeMode.light,
+      ),
+    ));
+    await tester.pump();
+    expect(find.byTooltip('People'), findsOneWidget);
+    expect(find.byTooltip('Drive'), findsOneWidget);
+    expect(find.byTooltip('მთავარი'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('People'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(find.byType(PeopleScreen), findsOneWidget);
+    expect(find.byTooltip('People'), findsOneWidget);
+    expect(find.byTooltip('Drive'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('shell keeps bottom navigation when opening and leaving Inbox',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

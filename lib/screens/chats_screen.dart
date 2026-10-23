@@ -1482,6 +1482,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                 GestureDetector(
                                   onLongPress: () => _showActionModal(msg),
                                   child: Container(
+                                    key: ValueKey('chat-bubble-${msg['id']}'),
                                     margin: const EdgeInsets.symmetric(vertical: 2),
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 14, vertical: 11,

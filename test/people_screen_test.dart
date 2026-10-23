@@ -105,10 +105,26 @@ void main() {
       await mountPeople(tester, service, links, dark: dark);
 
       expect(find.text('People'), findsOneWidget);
+      expect(find.text('Employee directory'), findsNothing);
+      // Only the outer Messages-style rounded search surface is painted.
+      final searchContainer = tester.widget<Container>(
+        find.byKey(const ValueKey('people-search-surface')),
+      );
+      final searchDecoration = searchContainer.decoration! as BoxDecoration;
+      expect(searchDecoration.border, isNull);
+      expect(searchDecoration.borderRadius, BorderRadius.circular(16));
+      final search = tester.widget<TextField>(
+        find.byKey(const ValueKey('people-search')),
+      );
+      expect(search.decoration!.filled, isFalse);
+      expect(search.decoration!.border, InputBorder.none);
+      expect(search.decoration!.focusedBorder, InputBorder.none);
+      expect(search.decoration!.enabledBorder, InputBorder.none);
       expect(find.byKey(const ValueKey('people-card-u1')), findsOneWidget);
       expect(find.byKey(const ValueKey('people-card-u2')), findsNothing);
       expect(find.text('Stores'), findsOneWidget);
       expect(find.byIcon(Icons.more_vert), findsNothing);
+      expect(find.byIcon(Icons.open_in_new_rounded), findsNothing);
       expect(service.calls.first['status'], 'ACTIVE');
 
       await tester.tap(find.byKey(const ValueKey('people-email-u1')));

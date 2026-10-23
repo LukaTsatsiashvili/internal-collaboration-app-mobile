@@ -55,6 +55,7 @@ class NotificationService {
     for (final event in [
       'notification:created',
       'notification:updated',
+      'notification:reconcile',
       'connect',
     ]) {
       _cancelRealtime.add(realtime.listen(event, (_) => refresh()));

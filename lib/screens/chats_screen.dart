@@ -995,8 +995,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     showDialog(
       context: context,
-      barrierColor: Colors.black26,
+      barrierColor: Colors.black.withValues(alpha: 0.38),
       builder: (context) {
+        final palette = Theme.of(context).extension<AppPalette>()!;
         return Center(
           child: Material(
             color: Colors.transparent,
@@ -1004,11 +1005,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 24),
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF242424),
+                color: palette.panel,
+                border: Border.all(color: palette.cardBorder),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
+                    color: palette.panelShadow,
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -1065,20 +1067,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       );
                     }).toList(),
                   ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: Divider(color: Colors.white24, height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 4,
+                    ),
+                    child: Divider(color: palette.cardBorder, height: 16),
                   ),
                   ListTile(
                     dense: true,
-                    leading: const Icon(
-                      Icons.reply,
-                      color: Colors.white,
-                      size: 20,
+                    leading: Icon(
+                      Icons.reply_rounded, color: palette.link, size: 20,
                     ),
-                    title: const Text(
+                    title: Text(
                       'პასუხის გაცემა (Reply)',
-                      style: TextStyle(color: Colors.white, fontSize: 14),
+                      style: TextStyle(color: palette.ink, fontSize: 14),
                     ),
                     onTap: () {
                       Navigator.pop(context);
@@ -1092,14 +1094,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   if (isMe) ...[
                     ListTile(
                       dense: true,
-                      leading: const Icon(
-                        Icons.edit,
-                        color: Colors.blueAccent,
-                        size: 20,
+                      leading: Icon(
+                        Icons.edit_outlined, color: palette.link, size: 20,
                       ),
-                      title: const Text(
+                      title: Text(
                         'შეცვლა (Edit)',
-                        style: TextStyle(color: Colors.white, fontSize: 14),
+                        style: TextStyle(color: palette.ink, fontSize: 14),
                       ),
                       onTap: () {
                         Navigator.pop(context);
@@ -1112,14 +1112,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                     ListTile(
                       dense: true,
-                      leading: const Icon(
-                        Icons.delete,
-                        color: Colors.redAccent,
-                        size: 20,
+                      leading: Icon(
+                        Icons.delete_outline_rounded,
+                        color: Theme.of(context).colorScheme.error, size: 20,
                       ),
-                      title: const Text(
+                      title: Text(
                         'წაშლა (Delete)',
-                        style: TextStyle(color: Colors.redAccent, fontSize: 14),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 14,
+                        ),
                       ),
                       onTap: () {
                         Navigator.pop(context);

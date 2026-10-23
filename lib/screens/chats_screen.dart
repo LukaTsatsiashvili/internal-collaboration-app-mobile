@@ -242,6 +242,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   bool _recentlyActive(dynamic conversation) {
     final user = _otherUser(conversation);
+    // Once the server exposes presence, use its live Redis/socket status
+    // rather than treating a recent logout timestamp as "online".
+    if (user is Map && user['isOnline'] is bool) {
+      return user['isOnline'] == true;
+    }
+    // Compatibility only: older production servers have no presence field.
     final value = user == null ? null : user['lastSeenAt'];
     if (value is! String) return false;
     final seen = DateTime.tryParse(value);
@@ -251,7 +257,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   int _unreadCount(dynamic conversation) {
-    final value = conversation['unreadCount'];
+    // The API includes reactions in unreadCount; this badge is specifically
+    // for unread messages. Keep legacy fixtures compatible until migrated.
+    final value = conversation['unreadMessageCount'] ??
+        conversation['unreadCount'];
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
   }
@@ -680,6 +689,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late final ChatService _chatService;
   int _loadVersion = 0;
   int _messageEventRevision = 0;
+  Timer? _markReadTimer;
+  bool _markReadInFlight = false;
+  bool _readAgain = false;
   String? _loadError;
   bool _socketInitialized = false;
   final TextEditingController _messageController = TextEditingController();
@@ -730,12 +742,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _loadError = null;
         _isLoading = false;
       });
+      _scheduleMarkReadIfNeeded(messages);
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
       setState(() {
         _loadError = loadErrorDescription(error);
         _isLoading = false;
       });
+    }
+  }
+
+  bool _hasUnreadReceipt(dynamic message) {
+    if (_currentUserId == null || message is! Map) return false;
+    if (message['senderId'] == _currentUserId) return false;
+    final receipts = message['receipts'];
+    if (receipts is! List) return false;
+    return receipts.any((receipt) =>
+        receipt is Map &&
+        receipt['userId']?.toString() == _currentUserId &&
+        receipt['readAt'] == null);
+  }
+
+  void _scheduleMarkReadIfNeeded(List<dynamic> messages) {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    if (!messages.any(_hasUnreadReceipt)) return;
+    _markReadTimer?.cancel();
+    _markReadTimer = Timer(const Duration(milliseconds: 150), () {
+      if (mounted && ModalRoute.of(context)?.isCurrent == true) {
+        unawaited(_markRead());
+      }
+    });
+  }
+
+  Future<void> _markRead() async {
+    if (_markReadInFlight) {
+      _readAgain = true;
+      return;
+    }
+    _markReadInFlight = true;
+    try {
+      await _chatService.markConversationRead(widget.conversationId);
+    } catch (_) {
+      // Leave the server unread state intact if this request fails.
+      // The next successful inbox/chat refresh can retry it.
+    } finally {
+      _markReadInFlight = false;
+      if (_readAgain && mounted) {
+        _readAgain = false;
+        _scheduleMarkReadIfNeeded(_messages);
+      }
     }
   }
 
@@ -780,6 +835,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _messages.add(Map<String, dynamic>.from(incoming));
       }
     });
+    _scheduleMarkReadIfNeeded([incoming]);
   }
 
   Future<String?> _getProfileId() async {
@@ -1084,6 +1140,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void dispose() {
     _loadVersion++;
+    _markReadTimer?.cancel();
     _chatService.disposeSocket();
     _messageController.dispose();
     super.dispose();

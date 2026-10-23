@@ -35,7 +35,9 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   // All Messages colors now come from the app-wide ThemeExtension.
-  AppPalette get _palette => Theme.of(context).extension<AppPalette>()!;
+  AppPalette get _palette => Theme.of(context).extension<AppPalette>() ??
+      (Theme.of(context).brightness == Brightness.dark
+          ? AppPalette.dark : AppPalette.light);
   Color get _ink => _palette.ink;
   Color get _muted => _palette.muted;
   Color get _page => _palette.page;

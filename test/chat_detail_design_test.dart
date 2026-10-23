@@ -56,13 +56,14 @@ Future<void> showChat(
   ThemeData theme,
   DesignChatService service, {
   bool isGroup = false,
+  bool isOnline = true,
 }) async {
   await tester.pumpWidget(MaterialApp(
     theme: theme,
     home: ChatDetailScreen(
       conversationId: 'room',
       chatName: 'System Administrator',
-      isOnline: true,
+      isOnline: isOnline,
       isGroup: isGroup,
       service: service,
       loadCurrentUserId: () async => 'me',
@@ -87,10 +88,21 @@ void main() {
       expect(find.byKey(const ValueKey('chat-detail-back')), findsOneWidget);
       expect(find.byKey(const ValueKey('chat-detail-contact-name')),
           findsOneWidget);
-      expect(find.text('Active now'), findsOneWidget);
+      expect(find.text('Active now'), findsNothing);
+      expect(find.text('Offline'), findsNothing);
+      expect(find.byKey(const ValueKey('chat-detail-online-dot')),
+          findsOneWidget);
       expect(find.byIcon(Icons.more_vert), findsNothing);
       expect(find.byKey(const ValueKey('chat-detail-attach')), findsOneWidget);
       expect(find.byKey(const ValueKey('chat-detail-send')), findsOneWidget);
+
+      // The divider belongs below the input, next to the shell navigation.
+      final composer = tester.widget<Container>(
+          find.byKey(const ValueKey('chat-detail-composer-area')));
+      final composerDecoration = composer.decoration! as BoxDecoration;
+      final composerBorder = composerDecoration.border! as Border;
+      expect(composerBorder.top, BorderSide.none);
+      expect(composerBorder.bottom.color, palette.cardBorder);
 
       final incoming = tester.widget<Container>(
           find.byKey(const ValueKey('chat-bubble-incoming')));
@@ -136,6 +148,18 @@ void main() {
     await tester.longPress(find.text('A message from colleague'));
     await tester.pumpAndSettle();
     expect(find.text('პასუხის გაცემა (Reply)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('offline peer keeps a clean single-line header', (tester) async {
+    await showChat(
+      tester, AppTheme.dark, DesignChatService(), isOnline: false,
+    );
+    expect(find.byKey(const ValueKey('chat-detail-contact-name')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-detail-online-dot')), findsNothing);
+    expect(find.text('Active now'), findsNothing);
+    expect(find.text('Offline'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

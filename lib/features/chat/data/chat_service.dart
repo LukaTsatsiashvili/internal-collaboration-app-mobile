@@ -1,14 +1,11 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-
 import '../../../core/network/api_client.dart';
+import '../../../core/network/realtime_client.dart';
 
 class ChatService {
   final ApiClient _apiClient = ApiClient();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
-  static IO.Socket? _socket;
+  final List<void Function()> _socketSubscriptions = [];
+  void Function()? _leaveConversation;
 
   Future<void> addReaction(String messageId, String emoji) async {
     try {
@@ -147,25 +144,57 @@ class ChatService {
     }
   }
 
+  /// Listen to the production room events. The shared connection survives
+  /// other screens subscribing and reconnects when the access token rotates.
   Future<void> initSocket(Function(dynamic) onMessageReceived) async {
-    if (_socket != null && _socket!.connected) return;
-
-    String? token = await _secureStorage.read(key: 'access_token');
-
-    _socket = IO.io(Uri.parse(ApiClient.baseUrl).origin, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': true,
-      'auth': {'token': token},
-    });
-
-    _socket?.on('message:created', (data) => onMessageReceived(data));
-    _socket?.on('message:updated', (data) => onMessageReceived(data));
-    _socket?.on('message:deleted', (data) => onMessageReceived(data));
+    if (_socketSubscriptions.isNotEmpty) return;
+    final realtime = RealtimeClient.instance;
+    _socketSubscriptions.addAll([
+      realtime.listen('message:created', onMessageReceived),
+      realtime.listen('message:updated', onMessageReceived),
+      realtime.listen('message:deleted', (data) {
+        if (data is Map) {
+          onMessageReceived({...data, '__realtimeDeleted': true});
+        }
+      }),
+      for (final event in [
+        'message:reaction-updated',
+        'message:pin-updated',
+        'message:receipt-updated',
+        'conversation:read-updated',
+      ])
+        realtime.listen(event, (data) {
+          if (data is Map) {
+            onMessageReceived({...data, '__realtimeRefresh': true});
+          }
+        }),
+      realtime.listen('connect', (_) =>
+          onMessageReceived({'__realtimeRefresh': true})),
+    ]);
   }
 
+  /// A new conversation might not have been in the server's initial rooms.
+  /// Room joins must also be replayed after a reconnect.
   void joinConversation(String conversationId) {
-    if (_socket != null && _socket!.connected) {
-      _socket?.emit('conversation:join', conversationId);
+    _leaveConversation?.call();
+    _leaveConversation = RealtimeClient.instance.joinConversation(conversationId);
+  }
+
+  /// The list view does not receive message events through REST; refresh the
+  /// server-ordered list when the room's messages or membership change.
+  void watchConversations(void Function() onChanged) {
+    if (_socketSubscriptions.isNotEmpty) return;
+    final realtime = RealtimeClient.instance;
+    for (final event in [
+      'connect',
+      'message:created',
+      'message:updated',
+      'message:deleted',
+      'conversation:updated',
+      'conversation:removed',
+      'conversation:read-updated',
+    ]) {
+      _socketSubscriptions.add(realtime.listen(event, (_) => onChanged()));
     }
   }
 
@@ -198,8 +227,11 @@ class ChatService {
   }
 
   void disposeSocket() {
-    _socket?.disconnect();
-    _socket?.dispose();
-    _socket = null;
+    _leaveConversation?.call();
+    _leaveConversation = null;
+    for (final cancel in _socketSubscriptions) {
+      cancel();
+    }
+    _socketSubscriptions.clear();
   }
 }

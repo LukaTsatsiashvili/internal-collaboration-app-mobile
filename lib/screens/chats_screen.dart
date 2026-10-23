@@ -418,6 +418,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
               builder: (_) => ChatDetailScreen(
                 conversationId: conversationId,
                 chatName: name,
+                isOnline: chat['type'] == 'DIRECT' ? active : null,
+                isGroup: chat['type'] == 'GROUP',
               ),
             ),
           ).then((_) {
@@ -671,6 +673,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 class ChatDetailScreen extends StatefulWidget {
   final String conversationId;
   final String chatName;
+  /// Optional display-only status derived from the existing chat list.
+  /// Presence synchronization is intentionally outside this UI redesign.
+  final bool? isOnline;
+  final bool isGroup;
   final ChatService? service;
   final Future<String?> Function()? loadCurrentUserId;
 
@@ -678,6 +684,8 @@ class ChatDetailScreen extends StatefulWidget {
     super.key,
     required this.conversationId,
     required this.chatName,
+    this.isOnline,
+    this.isGroup = false,
     this.service,
     this.loadCurrentUserId,
   });
@@ -1128,6 +1136,129 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  String get _chatInitials {
+    final parts = widget.chatName.trim().split(RegExp(r'\\s+'))
+        .where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length > 1) {
+      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
+    }
+    final name = parts.first;
+    return name.substring(0, name.length < 2 ? 1 : 2).toUpperCase();
+  }
+
+  PreferredSizeWidget _chatAppBar(AppPalette palette) {
+    final online = widget.isOnline == true;
+    return AppBar(
+      key: const ValueKey('chat-detail-header'),
+      automaticallyImplyLeading: false,
+      backgroundColor: palette.panel,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      titleSpacing: 8,
+      toolbarHeight: 68,
+      title: Row(
+        children: [
+          IconButton(
+            key: const ValueKey('chat-detail-back'),
+            tooltip: 'უკან',
+            icon: Icon(Icons.arrow_back_ios_new_rounded,
+                color: palette.secondaryText, size: 19),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+          const SizedBox(width: 3),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.success.withValues(alpha: 0.17),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: widget.isGroup
+                    ? const Icon(Icons.groups_rounded,
+                        size: 23, color: AppColors.success)
+                    : Text(
+                        _chatInitials,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.success,
+                        ),
+                      ),
+              ),
+              if (online && !widget.isGroup)
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: AppColors.success,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: palette.panel, width: 2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.chatName,
+                  key: const ValueKey('chat-detail-contact-name'),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: palette.ink,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+                if (widget.isGroup || widget.isOnline != null) ...[
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      if (online && !widget.isGroup) ...[
+                        const Icon(Icons.circle, color: AppColors.success, size: 6),
+                        const SizedBox(width: 5),
+                      ],
+                      Text(
+                        widget.isGroup
+                            ? 'ჯგუფური საუბარი'
+                            : online ? 'Active now' : 'Offline',
+                        key: const ValueKey('chat-detail-presence'),
+                        style: TextStyle(
+                          color: online && !widget.isGroup
+                              ? AppColors.success : palette.muted,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: palette.cardBorder),
+      ),
+    );
+  }
+
   String _formatTime(String? dateStr) {
     if (dateStr == null) return '';
     try {
@@ -1149,10 +1280,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = Theme.of(context).extension<AppPalette>()!;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.chatName)),
+      backgroundColor: palette.page,
+      appBar: _chatAppBar(palette),
       body: SafeArea(
-        child: GestureDetector(
+        top: false,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                palette.page,
+                palette.unreadBackground.withValues(alpha: 0.65),
+                palette.page,
+              ],
+            ),
+          ),
+          child: GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => FocusScope.of(context).unfocus(),
           child: Column(
@@ -1764,6 +1910,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
               ),
             ],
+          ),
           ),
         ),
       ),

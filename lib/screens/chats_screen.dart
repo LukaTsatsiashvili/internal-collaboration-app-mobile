@@ -1103,13 +1103,21 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               final available = (constraints.maxHeight - top - safe.bottom - 12)
                   .clamp(135.0, double.infinity).toDouble();
               return Stack(children: [
+                // The full-screen blur lives on top of the route's
+                // dismissible barrier. Handle taps here explicitly so
+                // users can close the menu without choosing an action.
                 Positioned.fill(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-                    child: ColoredBox(
-                      key: const ValueKey('chat-action-backdrop'),
-                      color: Colors.black.withValues(
-                          alpha: dark ? 0.46 : 0.25),
+                  child: GestureDetector(
+                    key: const ValueKey('chat-action-dismiss-region'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => Navigator.of(popupContext).pop(),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                      child: ColoredBox(
+                        key: const ValueKey('chat-action-backdrop'),
+                        color: Colors.black.withValues(
+                            alpha: dark ? 0.46 : 0.25),
+                      ),
                     ),
                   ),
                 ),

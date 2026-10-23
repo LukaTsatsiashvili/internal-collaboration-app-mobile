@@ -1,8 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:socket_io_client/socket_io_client.dart' as IO;
-
 import '../../../core/network/api_client.dart';
+import '../../../core/network/realtime_client.dart';
 
 class NotificationInbox {
   const NotificationInbox({required this.items, required this.unreadCount});
@@ -15,9 +13,7 @@ class NotificationService {
   NotificationService({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
   final Dio _dio;
-  final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  IO.Socket? _socket;
-  int _socketVersion = 0;
+  final List<void Function()> _cancelRealtime = [];
 
   Future<NotificationInbox> getInbox() async {
     final response = await _dio.get('/notifications');
@@ -51,31 +47,25 @@ class NotificationService {
         data: const <String, dynamic>{});
   }
 
-  /// Socket events are invalidation hints; the REST API is the source of truth.
+  /// Production notification events invalidate the REST inbox. Multiple
+  /// screens can subscribe without disconnecting one another.
   Future<void> connect(void Function() refresh) async {
     disposeSocket();
-    final version = _socketVersion;
-    final token = await _storage.read(key: 'access_token');
-    if (version != _socketVersion || token == null || token.isEmpty) return;
-    final socket = IO.io(Uri.parse(ApiClient.baseUrl).origin, <String, dynamic>{
-      'transports': ['websocket'],
-      'autoConnect': false,
-      'forceNew': true,
-      'reconnection': true,
-      'auth': {'token': token},
-    });
-    _socket = socket;
-    socket.on('notification:created', (_) => refresh());
-    socket.on('notification:updated', (_) => refresh());
-    socket.on('connect', (_) => refresh());
-    socket.connect();
+    final realtime = RealtimeClient.instance;
+    for (final event in [
+      'notification:created',
+      'notification:updated',
+      'connect',
+    ]) {
+      _cancelRealtime.add(realtime.listen(event, (_) => refresh()));
+    }
   }
 
   void disposeSocket() {
-    _socketVersion++;
-    final socket = _socket;
-    _socket = null;
-    socket?.disconnect();
-    socket?.dispose();
+    for (final cancel in _cancelRealtime) {
+      cancel();
+    }
+    _cancelRealtime.clear();
   }
+
 }

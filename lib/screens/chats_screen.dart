@@ -1322,7 +1322,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ? const Center(child: Text('დაიწყეთ საუბარი...'))
                     : ListView.builder(
                         reverse: true,
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 22),
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         itemCount: _messages.length,
                         itemBuilder: (context, index) {
                           final reversedIndex = _messages.length - 1 - index;
@@ -1347,16 +1349,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   ? Alignment.centerRight
                                   : Alignment.centerLeft,
                               child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                margin: const EdgeInsets.symmetric(vertical: 5),
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 8,
+                                  horizontal: 13,
+                                  vertical: 9,
                                 ),
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: Colors.grey.withValues(alpha: 0.3),
-                                  ),
+                                  color: palette.panel,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(color: palette.cardBorder),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1364,13 +1365,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                     Icon(
                                       Icons.block,
                                       size: 14,
-                                      color: Colors.grey.shade500,
+                                      color: palette.muted,
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
                                       'ეს შეტყობინება წაიშალა',
                                       style: TextStyle(
-                                        color: Colors.grey.shade500,
+                                        color: palette.muted,
                                         fontSize: 13,
                                         fontStyle: FontStyle.italic,
                                       ),
@@ -1435,6 +1436,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           final headerText = isMe
                               ? 'თქვენ · $timeStr'
                               : '$senderName · $timeStr';
+                          // Consecutive messages from one person appear as a
+                          // single visual group, as in the supplied reference.
+                          // This changes only labels/spacing, not message data.
+                          final previous = reversedIndex > 0
+                              ? _messages[reversedIndex - 1] : null;
+                          final previousSender = previous == null ? null
+                              : previous['senderId'] ?? previous['sender']?['id'];
+                          final currentAt = DateTime.tryParse(
+                              msg['createdAt']?.toString() ?? '');
+                          final previousAt = DateTime.tryParse(
+                              previous?['createdAt']?.toString() ?? '');
+                          final sameWindow = currentAt != null &&
+                              previousAt != null &&
+                              currentAt.difference(previousAt).inMinutes.abs() < 5;
+                          final showHeader =
+                              previousSender != senderId || !sameWindow;
 
                           return Align(
                             alignment: isMe
@@ -1445,51 +1462,58 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   ? CrossAxisAlignment.end
                                   : CrossAxisAlignment.start,
                               children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 8,
-                                    bottom: 2,
-                                    left: 4,
-                                    right: 4,
-                                  ),
-                                  child: Text(
-                                    headerText,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey.shade400,
+                                if (showHeader)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 11, bottom: 5, left: 5, right: 5,
+                                    ),
+                                    child: Text(
+                                      headerText,
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                        color: palette.secondaryText,
+                                      ),
                                     ),
                                   ),
-                                ),
 
                                 GestureDetector(
                                   onLongPress: () => _showActionModal(msg),
                                   child: Container(
-                                    margin: const EdgeInsets.symmetric(
-                                      vertical: 2,
-                                    ),
+                                    margin: const EdgeInsets.symmetric(vertical: 2),
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 10,
+                                      horizontal: 14, vertical: 11,
                                     ),
                                     constraints: BoxConstraints(
-                                      maxWidth:
-                                          MediaQuery.of(context).size.width *
-                                          0.75,
+                                      maxWidth: MediaQuery.sizeOf(context).width * 0.78,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: isMe
-                                          ? Colors.blue.shade600
-                                          : Colors.grey.shade800,
+                                      color: isMe ? null : palette.card,
+                                      gradient: isMe
+                                          ? const LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                AppColors.gradientStart,
+                                                AppColors.gradientEnd,
+                                              ],
+                                            ) : null,
+                                      border: isMe ? null :
+                                          Border.all(color: palette.cardBorder),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: isMe
+                                              ? AppColors.primary.withValues(alpha: 0.15)
+                                              : palette.cardShadow,
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
                                       borderRadius: BorderRadius.only(
-                                        topLeft: const Radius.circular(16),
-                                        topRight: const Radius.circular(16),
-                                        bottomLeft: Radius.circular(
-                                          isMe ? 16 : 4,
-                                        ),
-                                        bottomRight: Radius.circular(
-                                          isMe ? 4 : 16,
-                                        ),
+                                        topLeft: const Radius.circular(17),
+                                        topRight: const Radius.circular(17),
+                                        bottomLeft: Radius.circular(isMe ? 17 : 5),
+                                        bottomRight: Radius.circular(isMe ? 5 : 17),
                                       ),
                                     ),
                                     child: Column(
@@ -1506,17 +1530,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                               vertical: 4,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: Colors.black.withValues(
-                                                alpha: 0.2,
-                                              ),
-                                              border: const Border(
+                                              color: isMe
+                                                  ? Colors.white.withValues(alpha: 0.16)
+                                                  : palette.unreadBackground,
+                                              border: Border(
                                                 left: BorderSide(
-                                                  color: Colors.white70,
+                                                  color: isMe ? Colors.white70
+                                                      : palette.link,
                                                   width: 3,
                                                 ),
                                               ),
                                               borderRadius:
-                                                  BorderRadius.circular(4),
+                                                  BorderRadius.circular(8),
                                             ),
                                             child: Column(
                                               crossAxisAlignment:
@@ -1527,7 +1552,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                   style: const TextStyle(
                                                     fontSize: 10,
                                                     fontWeight: FontWeight.bold,
-                                                    color: Colors.white,
+                                                    color: isMe ? Colors.white
+                                                        : palette.ink,
                                                   ),
                                                 ),
                                                 const SizedBox(height: 1),
@@ -1539,7 +1565,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                       TextOverflow.ellipsis,
                                                   style: const TextStyle(
                                                     fontSize: 11,
-                                                    color: Colors.white70,
+                                                    color: isMe
+                                                        ? Colors.white70
+                                                        : palette.secondaryText,
                                                   ),
                                                 ),
                                               ],
@@ -1549,9 +1577,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                         if (content.isNotEmpty)
                                           Text(
                                             content,
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 15,
+                                            style: TextStyle(
+                                              color: isMe ? Colors.white
+                                                  : palette.ink,
+                                              fontSize: 14,
+                                              height: 1.45,
+                                              fontWeight: FontWeight.w500,
                                             ),
                                           ),
 
@@ -1591,16 +1622,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                               ),
                                               padding: const EdgeInsets.all(8),
                                               decoration: BoxDecoration(
-                                                color: Colors.white,
+                                                color: palette.panel,
                                                 borderRadius:
-                                                    BorderRadius.circular(8),
+                                                    BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: palette.cardBorder,
+                                                ),
                                               ),
                                               child: Row(
                                                 children: [
                                                   const Icon(
                                                     Icons.insert_drive_file,
-                                                    color: Colors.blue,
-                                                    size: 28,
+                                                    color: AppColors.primary,
+                                                    size: 25,
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Expanded(
@@ -1613,8 +1647,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                           fileName,
                                                           style:
                                                               const TextStyle(
-                                                                color: Colors
-                                                                    .black87,
+                                                                color: palette.ink,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .bold,
@@ -1629,8 +1662,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                             fileSize,
                                                             style:
                                                                 const TextStyle(
-                                                                  color: Colors
-                                                                      .grey,
+                                                                  color: palette.muted,
                                                                   fontSize: 11,
                                                                 ),
                                                           ),
@@ -1640,7 +1672,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                                   IconButton(
                                                     icon: const Icon(
                                                       Icons.download,
-                                                      color: Colors.blue,
+                                                      color: AppColors.primary,
                                                       size: 20,
                                                     ),
                                                     onPressed: () async {
@@ -1763,12 +1795,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .surfaceContainerHighest,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
+                                            color: palette.panel,
+                                            border: Border.all(color: palette.cardBorder),
+                                            borderRadius: BorderRadius.circular(12),
                                           ),
                                           child: Text(
                                             r['emoji'] ?? '',

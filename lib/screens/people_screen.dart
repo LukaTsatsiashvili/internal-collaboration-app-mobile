@@ -198,6 +198,7 @@ class _PeopleScreenState extends State<PeopleScreen>
 
   Widget _toolbar() => Row(children: [
     Expanded(child: Container(
+      key: const ValueKey('people-search-surface'),
       height: 47,
       decoration: BoxDecoration(
         // Match the single-layer rounded search field from Messages.

@@ -27,6 +27,7 @@ class RealtimeClient with WidgetsBindingObserver {
   bool _recoveringAuth = false;
   bool _foreground = true;
   Timer? _checkTimer;
+  Timer? _heartbeatTimer;
   int _checkCount = 0;
 
   void Function() listen(String event, void Function(dynamic) callback) {
@@ -145,6 +146,15 @@ class RealtimeClient with WidgetsBindingObserver {
       );
       _socket = socket;
       socket.onConnect((_) {
+        _heartbeatTimer?.cancel();
+        // The production Presence key expires after 90 seconds without a
+        // heartbeat. A stable WebSocket alone does not refresh that TTL.
+        socket.emit('presence:heartbeat');
+        _heartbeatTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+          if (identical(_socket, socket) && socket.connected) {
+            socket.emit('presence:heartbeat');
+          }
+        });
         for (final room in _conversationRooms.keys) {
           socket.emit('conversation:join', room);
         }
@@ -157,6 +167,8 @@ class RealtimeClient with WidgetsBindingObserver {
         }
       });
       socket.onDisconnect((dynamic reason) {
+        _heartbeatTimer?.cancel();
+        _heartbeatTimer = null;
         // The prod server explicitly closes sockets at JWT expiry.
         if (reason == 'io server disconnect') {
           unawaited(_recoverAuthentication(socket));
@@ -191,6 +203,8 @@ class RealtimeClient with WidgetsBindingObserver {
   }
 
   void _closeSocket() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
     final socket = _socket;
     _socket = null;
     _socketToken = null;

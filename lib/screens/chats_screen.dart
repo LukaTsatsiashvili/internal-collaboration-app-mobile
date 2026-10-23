@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 
 import 'dart:io';
@@ -53,6 +54,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   late final ChatService _chatService;
   int _loadVersion = 0;
+  Timer? _liveReloadTimer;
   final TextEditingController _searchController = TextEditingController();
 
   bool _isLoading = true;
@@ -66,6 +68,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     super.initState();
     _chatService = widget.service ?? ChatService();
     _loadData();
+    if (widget.service == null) {
+      _chatService.watchConversations(_scheduleLiveReload);
+    }
     if (widget.openCreateOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _showNewConversationDialog();
@@ -76,24 +81,35 @@ class _ChatsScreenState extends State<ChatsScreen> {
   @override
   void dispose() {
     _loadVersion++;
+    _liveReloadTimer?.cancel();
+    _chatService.disposeSocket();
     _searchController.dispose();
     super.dispose();
   }
 
-  // Preserve the existing user/conversation API and its ordering.
-  Future<void> _loadData() async {
+  void _scheduleLiveReload() {
+    _liveReloadTimer?.cancel();
+    _liveReloadTimer = Timer(const Duration(milliseconds: 120), () {
+      if (mounted) unawaited(_loadData(silent: true));
+    });
+  }
+
+  /// REST stays authoritative; realtime invalidations update the visible
+  /// conversations without flashing a loading spinner.
+  Future<void> _loadData({bool silent = false}) async {
     if (!mounted) return;
     final version = ++_loadVersion;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
     try {
-      String? currentUserId;
-      if (widget.loadCurrentUserId != null) {
+      String? currentUserId = _currentUserId;
+      if (currentUserId == null && widget.loadCurrentUserId != null) {
         currentUserId = await widget.loadCurrentUserId!();
-      } else {
+      } else if (currentUserId == null) {
         final profileResponse = await ApiClient().dio.get('/auth/me');
         if (profileResponse.statusCode == 200 &&
             profileResponse.data['success'] == true) {
@@ -105,12 +121,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
       setState(() {
         _currentUserId = currentUserId;
         _chats = chats;
+        _errorMessage = null;
       });
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
-      setState(() {
-        _errorMessage = loadErrorDescription(error);
-      });
+      setState(() => _errorMessage = loadErrorDescription(error));
     } finally {
       if (mounted && version == _loadVersion) {
         setState(() => _isLoading = false);
@@ -685,51 +700,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     _initializeChat();
   }
 
-  Future<void> _initializeChat() async {
+  Future<void> _initializeChat({bool silent = false}) async {
     final version = ++_loadVersion;
-    if (mounted) setState(() => _isLoading = true);
+    if (mounted && !silent) setState(() => _isLoading = true);
     try {
+      if (!_socketInitialized) {
+        _socketInitialized = true;
+        // Subscribe before the REST fetch, so incoming messages cannot fall
+        // between loading history and registering event listeners.
+        await _chatService.initSocket(_onRealtimeMessage);
+        _chatService.joinConversation(widget.conversationId);
+      }
       final profile = widget.loadCurrentUserId != null
           ? await widget.loadCurrentUserId!()
           : await _getProfileId();
       final messages = await _chatService.getMessages(widget.conversationId);
       if (!mounted || version != _loadVersion) return;
-
       setState(() {
         _currentUserId = profile;
         _messages = messages;
         _loadError = null;
         _isLoading = false;
-      });
-
-      if (_socketInitialized) return;
-      _socketInitialized = true;
-      _chatService.joinConversation(widget.conversationId);
-
-      _chatService.initSocket((incomingMessage) {
-        if (!mounted || incomingMessage is! Map) return;
-        final msgConvId =
-            incomingMessage['conversationId'] ??
-            incomingMessage['conversation']?['id'];
-        if (msgConvId == null || msgConvId == widget.conversationId) {
-          setState(() {
-            final index = _messages.indexWhere(
-              (m) => m['id'] == incomingMessage['id'],
-            );
-            if (index != -1) {
-              final oldMsg = _messages[index];
-              _messages[index] = {
-                ...oldMsg,
-                ...incomingMessage,
-                'content': incomingMessage['content'] ?? '',
-                'senderId': incomingMessage['senderId'] ?? oldMsg['senderId'],
-                'sender': incomingMessage['sender'] ?? oldMsg['sender'],
-              };
-            } else {
-              _messages.add(incomingMessage);
-            }
-          });
-        }
       });
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
@@ -738,6 +729,48 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  void _onRealtimeMessage(dynamic incoming) {
+    if (!mounted || incoming is! Map) return;
+    final conversationId =
+        incoming['conversationId'] ?? incoming['conversation']?['id'];
+    if (conversationId != null && conversationId != widget.conversationId) {
+      return;
+    }
+    if (incoming['__realtimeRefresh'] == true) {
+      unawaited(_initializeChat(silent: true));
+      return;
+    }
+    final id = incoming['id'];
+    if (id == null) return;
+    final index = _messages.indexWhere((message) => message['id'] == id);
+    if (incoming['__realtimeDeleted'] == true) {
+      if (index < 0) return;
+      setState(() {
+        _messages[index] = {
+          ..._messages[index],
+          'content': '',
+          'attachments': <dynamic>[],
+          'deletedAt': DateTime.now().toUtc().toIso8601String(),
+        };
+      });
+      return;
+    }
+    setState(() {
+      if (index >= 0) {
+        final previous = _messages[index];
+        _messages[index] = {
+          ...previous,
+          ...incoming,
+          'content': incoming['content'] ?? previous['content'] ?? '',
+          'senderId': incoming['senderId'] ?? previous['senderId'],
+          'sender': incoming['sender'] ?? previous['sender'],
+        };
+      } else {
+        _messages.add(Map<String, dynamic>.from(incoming));
+      }
+    });
   }
 
   Future<String?> _getProfileId() async {

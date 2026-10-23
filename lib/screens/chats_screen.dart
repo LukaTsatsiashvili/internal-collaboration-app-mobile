@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 import 'package:dio/dio.dart';
 
 import 'dart:io';
@@ -970,177 +971,380 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  void _showActionModal(Map<dynamic, dynamic> rawMessage) {
+
+  /// Anchored, presentation-only overlay for long-pressed messages.
+  void _showActionModal(Map<dynamic, dynamic> raw, BuildContext anchorContext) {
+    final box = anchorContext.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return;
+    final anchor = box.localToGlobal(Offset.zero);
+    final msg = Map<String, dynamic>.from(raw);
+    final id = msg['id']?.toString() ?? '';
+    final content = msg['content']?.toString() ?? '';
+    final me = _currentUserId != null &&
+        (msg['senderId'] ?? msg['sender']?['id']) == _currentUserId;
+    final sender = msg['sender'];
+    var senderName = 'მომხმარებელი';
+    if (sender is Map) {
+      final full = (sender['firstName']?.toString() ?? '') + ' ' +
+          (sender['lastName']?.toString() ?? '');
+      senderName = full.trim().isNotEmpty
+          ? full.trim()
+          : (sender['displayName'] ?? sender['email'] ?? senderName).toString();
+    } else if (msg['senderName'] != null) {
+      senderName = msg['senderName'].toString();
+    }
+    final time = _formatTime(msg['createdAt']?.toString());
+    final files = msg['attachments'] is List
+        ? msg['attachments'] as List : const <dynamic>[];
+    final reactions = msg['reactions'] is List
+        ? msg['reactions'] as List : const <dynamic>[];
     FocusScope.of(context).unfocus();
 
-    final message = Map<String, dynamic>.from(rawMessage);
-    final messageId = message['id'] ?? '';
-    final content = message['content'] ?? '';
-    final senderId = message['senderId'] ?? message['sender']?['id'];
-    final isMe = _currentUserId != null && senderId == _currentUserId;
-
-    String senderName = 'მომხმარებელი';
-    final senderObj = message['sender'];
-    if (senderObj != null) {
-      final fName = senderObj['firstName'] ?? '';
-      final lName = senderObj['lastName'] ?? '';
-      final combined = '$fName $lName'.trim();
-      if (combined.isNotEmpty) {
-        senderName = combined;
-      } else {
-        senderName =
-            senderObj['displayName'] ?? senderObj['email'] ?? 'მომხმარებელი';
-      }
-    } else if (message['senderName'] != null) {
-      senderName = message['senderName'];
-    }
-
-    showDialog(
+    showGeneralDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.38),
-      builder: (context) {
-        final palette = Theme.of(context).extension<AppPalette>() ??
-            (Theme.of(context).brightness == Brightness.dark
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 170),
+      pageBuilder: (popupContext, _, __) {
+        final p = Theme.of(popupContext).extension<AppPalette>() ??
+            (Theme.of(popupContext).brightness == Brightness.dark
                 ? AppPalette.dark : AppPalette.light);
-        return Center(
-          child: Material(
-            color: palette.panel,
+        final dark = Theme.of(popupContext).brightness == Brightness.dark;
+        const common = ['❤️', '👍', '😂', '😮', '😢', '🙏'];
+        const additional = [
+          '🔥', '👏', '🎉', '😍', '😊', '💯', '🤝', '👀', '✅', '💪', '🤔', '😎',
+        ];
+        var more = false;
+
+        Future<void> react(String emoji) async {
+          Navigator.of(popupContext).pop();
+          if (!mounted) return;
+          setState(() {
+            final index = _messages.indexWhere((m) => m['id'] == id);
+            if (index < 0) return;
+            final current = List<dynamic>.from(
+                _messages[index]['reactions'] ?? []);
+            current.add({'emoji': emoji, 'userId': _currentUserId});
+            _messages[index] = <String, dynamic>{
+              ...Map<String, dynamic>.from(_messages[index] as Map),
+              'reactions': current,
+            };
+          });
+          try {
+            await _chatService.addReaction(id, emoji);
+          } catch (error) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error.toString()),
+                    backgroundColor: Theme.of(context).colorScheme.error),
+              );
+            }
+          }
+        }
+
+        Widget emojiButton(String emoji, {bool extra = false}) {
+          return InkWell(
+            key: ValueKey(extra
+                ? 'chat-extra-reaction-' + emoji : 'chat-reaction-' + emoji),
             borderRadius: BorderRadius.circular(24),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-              decoration: BoxDecoration(
-                // The surrounding Material paints the surface; painting
-                // another opaque color between it and ListTiles hides ink.
-                border: Border.all(color: palette.cardBorder),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: palette.panelShadow,
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 2,
-                    runSpacing: 2,
-                    children: ['👍', '❤️', '🔥', '👏', '😂', '🎉'].map((emoji) {
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(30),
-                        onTap: () async {
-                          Navigator.pop(context);
-                          setState(() {
-                            final msgIndex = _messages.indexWhere(
-                              (m) => m['id'] == messageId,
-                            );
-                            if (msgIndex != -1) {
-                              List reactions = List.from(
-                                _messages[msgIndex]['reactions'] ?? [],
-                              );
-                              reactions.add({
-                                'emoji': emoji,
-                                'userId': _currentUserId,
-                              });
-                              _messages[msgIndex] = {
-                                ..._messages[msgIndex],
-                                'reactions': reactions,
-                              };
-                            }
-                          });
-                          try {
-                            await _chatService.addReaction(messageId, emoji);
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(e.toString()),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: Text(
-                            emoji,
-                            style: const TextStyle(fontSize: 28),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 4,
-                    ),
-                    child: Divider(color: palette.cardBorder, height: 16),
-                  ),
-                  ListTile(
-                    dense: true,
-                    leading: Icon(
-                      Icons.reply_rounded, color: palette.link, size: 20,
-                    ),
-                    title: Text(
-                      'პასუხის გაცემა (Reply)',
-                      style: TextStyle(color: palette.ink, fontSize: 14),
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      setState(() {
-                        _replyingToMessageId = messageId;
-                        _replyingToContent = content;
-                        _replyingToSenderName = isMe ? 'თქვენ' : senderName;
-                      });
-                    },
-                  ),
-                  if (isMe) ...[
-                    ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.edit_outlined, color: palette.link, size: 20,
-                      ),
-                      title: Text(
-                        'შეცვლა (Edit)',
-                        style: TextStyle(color: palette.ink, fontSize: 14),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        setState(() {
-                          _editingMessageId = messageId;
-                          _messageController.text = content;
-                          _replyingToMessageId = null;
-                        });
-                      },
-                    ),
-                    ListTile(
-                      dense: true,
-                      leading: Icon(
-                        Icons.delete_outline_rounded,
-                        color: Theme.of(context).colorScheme.error, size: 20,
-                      ),
-                      title: Text(
-                        'წაშლა (Delete)',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 14,
-                        ),
-                      ),
-                      onTap: () {
-                        Navigator.pop(context);
-                        _deleteMessage(messageId);
-                      },
-                    ),
-                  ],
-                ],
+            onTap: () => react(emoji),
+            child: SizedBox(width: extra ? 37 : 34, height: 38,
+              child: Center(child: Text(emoji,
+                  style: const TextStyle(fontSize: 22))),
+            ),
+          );
+        }
+
+        Widget menuAction({
+          required String keyName,
+          required IconData icon,
+          required String title,
+          required String english,
+          required VoidCallback pressed,
+          bool danger = false,
+        }) {
+          final fg = danger
+              ? Theme.of(popupContext).colorScheme.error : p.ink;
+          return Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: ValueKey(keyName),
+              borderRadius: BorderRadius.circular(12),
+              onTap: pressed,
+              child: SizedBox(
+                height: 49,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(children: [
+                    Icon(icon, size: 19,
+                        color: danger ? fg : p.secondaryText),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(title,
+                        style: TextStyle(color: fg, fontSize: 13,
+                            fontWeight: FontWeight.w600))),
+                    Text(english,
+                        style: TextStyle(fontSize: 10,
+                            color: danger ? fg.withValues(alpha: 0.65)
+                                : p.muted)),
+                  ]),
+                ),
               ),
             ),
-          ),
+          );
+        }
+
+        return StatefulBuilder(builder: (popupContext, setPopupState) {
+          return Material(
+            type: MaterialType.transparency,
+            child: LayoutBuilder(builder: (popupContext, constraints) {
+              final safe = MediaQuery.paddingOf(popupContext);
+              final topMax = (constraints.maxHeight - safe.bottom - 315)
+                  .clamp(safe.top + 8, double.infinity).toDouble();
+              final top = (anchor.dy - 70)
+                  .clamp(safe.top + 8, topMax).toDouble();
+              final available = (constraints.maxHeight - top - safe.bottom - 12)
+                  .clamp(135.0, double.infinity).toDouble();
+              return Stack(children: [
+                Positioned.fill(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                    child: ColoredBox(
+                      key: const ValueKey('chat-action-backdrop'),
+                      color: Colors.black.withValues(
+                          alpha: dark ? 0.46 : 0.25),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: top, left: 14, right: 14,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: available),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: me
+                            ? CrossAxisAlignment.end
+                            : CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            key: const ValueKey('chat-reaction-bar'),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 7, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: p.card,
+                              borderRadius: BorderRadius.circular(30),
+                              border: Border.all(color: p.cardBorder),
+                              boxShadow: [BoxShadow(
+                                color: p.panelShadow, blurRadius: 18,
+                                offset: const Offset(0, 6),
+                              )],
+                            ),
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                for (final emoji in common) emojiButton(emoji),
+                                InkWell(
+                                  key: const ValueKey('chat-reaction-more'),
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: () => setPopupState(() => more = !more),
+                                  child: SizedBox(width: 32, height: 38,
+                                    child: Icon(more ? Icons.close_rounded
+                                        : Icons.add_rounded,
+                                        size: 19, color: p.secondaryText)),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (more)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 7),
+                              child: Container(
+                                key: const ValueKey('chat-more-reactions'),
+                                width: 254,
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: p.card,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: p.cardBorder),
+                                ),
+                                child: Wrap(
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    for (final emoji in additional)
+                                      emojiButton(emoji, extra: true),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          const SizedBox(height: 13),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 3),
+                            child: Text(
+                              (me ? 'თქვენ' : senderName) +
+                                  (time.isEmpty ? '' : ' · ' + time),
+                              style: TextStyle(
+                                  color: dark ? Colors.white70 : p.ink,
+                                  fontSize: 10.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            key: const ValueKey('chat-selected-message'),
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * 0.78,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 11),
+                            decoration: BoxDecoration(
+                              color: me ? null : p.card,
+                              gradient: me ? const LinearGradient(
+                                colors: [
+                                  AppColors.gradientStart,
+                                  AppColors.gradientEnd,
+                                ],
+                              ) : null,
+                              border: Border.all(
+                                  color: me ? Colors.white : p.link, width: 2),
+                              borderRadius: BorderRadius.only(
+                                topLeft: const Radius.circular(17),
+                                topRight: const Radius.circular(17),
+                                bottomLeft: Radius.circular(me ? 17 : 5),
+                                bottomRight: Radius.circular(me ? 5 : 17),
+                              ),
+                              boxShadow: [BoxShadow(
+                                color: p.panelShadow,
+                                blurRadius: 14, offset: const Offset(0, 5),
+                              )],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (content.isNotEmpty)
+                                  Text(content, maxLines: 6,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: me ? Colors.white : p.ink,
+                                        fontSize: 14, height: 1.4)),
+                                if (files.isNotEmpty)
+                                  Padding(
+                                    padding: EdgeInsets.only(
+                                        top: content.isEmpty ? 0 : 5),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.attach_file_rounded,
+                                            size: 15, color: me
+                                                ? Colors.white70 : p.muted),
+                                        const SizedBox(width: 3),
+                                        Flexible(child: Text(
+                                          files.length.toString() + ' ფაილი',
+                                          style: TextStyle(fontSize: 12,
+                                              color: me ? Colors.white : p.ink),
+                                        )),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          if (reactions.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Wrap(spacing: 3, children: [
+                                for (final r in reactions.take(6))
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                        color: p.card,
+                                        borderRadius: BorderRadius.circular(12)),
+                                    child: Text((r is Map
+                                        ? r['emoji'] : r)?.toString() ?? '',
+                                        style: const TextStyle(fontSize: 12)),
+                                  ),
+                              ]),
+                            ),
+                          const SizedBox(height: 11),
+                          Container(
+                            key: const ValueKey('chat-message-actions'),
+                            width: 220,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: p.card,
+                              borderRadius: BorderRadius.circular(17),
+                              border: Border.all(color: p.cardBorder),
+                              boxShadow: [BoxShadow(
+                                  color: p.panelShadow, blurRadius: 20,
+                                  offset: const Offset(0, 7))],
+                            ),
+                            child: Column(mainAxisSize: MainAxisSize.min,
+                              children: [
+                                menuAction(
+                                  keyName: 'chat-action-reply',
+                                  icon: Icons.reply_rounded,
+                                  title: 'უპასუხე', english: 'Reply',
+                                  pressed: () {
+                                    Navigator.of(popupContext).pop();
+                                    if (!mounted) return;
+                                    setState(() {
+                                      _replyingToMessageId = id;
+                                      _replyingToContent = content;
+                                      _replyingToSenderName =
+                                          me ? 'თქვენ' : senderName;
+                                    });
+                                  },
+                                ),
+                                if (me) ...[
+                                  menuAction(
+                                    keyName: 'chat-action-edit',
+                                    icon: Icons.edit_outlined,
+                                    title: 'რედაქტირება', english: 'Edit',
+                                    pressed: () {
+                                      Navigator.of(popupContext).pop();
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _editingMessageId = id;
+                                        _messageController.text = content;
+                                        _replyingToMessageId = null;
+                                      });
+                                    },
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12),
+                                    child: Divider(height: 1,
+                                        color: p.cardBorder),
+                                  ),
+                                  menuAction(
+                                    keyName: 'chat-action-delete',
+                                    icon: Icons.delete_outline_rounded,
+                                    title: 'წაშლა', english: 'Delete',
+                                    danger: true,
+                                    pressed: () {
+                                      Navigator.of(popupContext).pop();
+                                      if (mounted) _deleteMessage(id);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ]);
+            }),
+          );
+        });
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(
+              parent: animation, curve: Curves.easeOut),
+          child: child,
         );
       },
     );
@@ -1483,7 +1687,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   ),
 
                                 GestureDetector(
-                                  onLongPress: () => _showActionModal(msg),
+                                  onLongPress: () => _showActionModal(
+                                    msg, context,
+                                  ),
                                   child: Container(
                                     key: ValueKey('chat-bubble-${msg['id']}'),
                                     margin: const EdgeInsets.symmetric(vertical: 2),

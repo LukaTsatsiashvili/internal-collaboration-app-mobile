@@ -973,10 +973,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
 
   /// Anchored, presentation-only overlay for long-pressed messages.
-  void _showActionModal(Map<dynamic, dynamic> raw, BuildContext anchorContext) {
-    final box = anchorContext.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return;
-    final anchor = box.localToGlobal(Offset.zero);
+  void _showActionModal(Map<dynamic, dynamic> raw, Offset anchor) {
     final msg = Map<String, dynamic>.from(raw);
     final id = msg['id']?.toString() ?? '';
     final content = msg['content']?.toString() ?? '';
@@ -1687,9 +1684,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                                   ),
 
                                 GestureDetector(
-                                  onLongPress: () => _showActionModal(
-                                    msg, context,
-                                  ),
+                                  onLongPressStart: (details) =>
+                                      _showActionModal(
+                                        msg, details.globalPosition,
+                                      ),
                                   child: Container(
                                     key: ValueKey('chat-bubble-${msg['id']}'),
                                     margin: const EdgeInsets.symmetric(vertical: 2),

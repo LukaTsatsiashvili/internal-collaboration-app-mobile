@@ -32,7 +32,8 @@ class MainNavigationScreen extends StatefulWidget {
   State<MainNavigationScreen> createState() => _MainNavigationScreenState();
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
+class _MainNavigationScreenState extends State<MainNavigationScreen>
+    with WidgetsBindingObserver {
   int _currentIndex = 0;
   GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
   bool _openingPush = false;
@@ -40,6 +41,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     AndroidPushService.instance.tappedNotificationId.addListener(_onPushTapped);
     unawaited(AndroidPushService.instance.activate());
     WidgetsBinding.instance.addPostFrameCallback((_) => _onPushTapped());
@@ -55,7 +57,15 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(AndroidPushService.instance.refreshRegistration());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     AndroidPushService.instance.tappedNotificationId.removeListener(_onPushTapped);
     super.dispose();
   }

@@ -679,6 +679,7 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   late final ChatService _chatService;
   int _loadVersion = 0;
+  int _messageEventRevision = 0;
   String? _loadError;
   bool _socketInitialized = false;
   final TextEditingController _messageController = TextEditingController();
@@ -702,6 +703,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Future<void> _initializeChat({bool silent = false}) async {
     final version = ++_loadVersion;
+    final eventRevision = _messageEventRevision;
     if (mounted && !silent) setState(() => _isLoading = true);
     try {
       if (!_socketInitialized) {
@@ -716,6 +718,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           : await _getProfileId();
       final messages = await _chatService.getMessages(widget.conversationId);
       if (!mounted || version != _loadVersion) return;
+      if (eventRevision != _messageEventRevision) {
+        // Never overwrite an event received while this GET was in flight
+        // with an older HTTP snapshot. Fetch the authoritative history again.
+        unawaited(_initializeChat(silent: true));
+        return;
+      }
       setState(() {
         _currentUserId = profile;
         _messages = messages;
@@ -744,6 +752,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
     final id = incoming['id'];
     if (id == null) return;
+    _messageEventRevision++;
     final index = _messages.indexWhere((message) => message['id'] == id);
     if (incoming['__realtimeDeleted'] == true) {
       if (index < 0) return;

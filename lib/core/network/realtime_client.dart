@@ -41,7 +41,7 @@ class RealtimeClient with WidgetsBindingObserver {
         unawaited(_sync());
         // The prod deadline worker writes notifications directly to the DB
         // and does not emit Socket.IO events. Reconcile them once per minute.
-        if (++_checkCount.isEven) _dispatch('notification:reconcile', null);
+        if ((++_checkCount).isEven) _dispatch('notification:reconcile', null);
       });
     }
     if (event != 'connect' && event != 'notification:reconcile') {

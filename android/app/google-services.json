@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "87275112337",
+    "project_id": "gtex-collaboration",
+    "storage_bucket": "gtex-collaboration.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:87275112337:android:af5238f8d590e6a63d3c30",
+        "android_client_info": {
+          "package_name": "ge.gtexshop.collaboration"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD5ggXugToB3q1xApa2AHfqeei6qnD2YYg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,5 +1,9 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/network/android_push_service.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'core/theme/app_theme.dart';
@@ -11,6 +15,16 @@ import 'features/auth/data/presentation/splash_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      await Firebase.initializeApp();
+      FirebaseMessaging.onBackgroundMessage(androidPushBackgroundHandler);
+      await AndroidPushService.instance.initialize();
+    } catch (error) {
+      // Firebase failure must not prevent employee login or normal API access.
+      debugPrint('Android FCM unavailable: $error');
+    }
+  }
   // Keep the phone's top status indicators visible, but hide its bottom
   // Android navigation bar to give the Flutter app more usable space.
   await SystemChrome.setEnabledSystemUIMode(

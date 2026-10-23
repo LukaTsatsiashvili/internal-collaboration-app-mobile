@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/auth_session.dart';
+import '../../../core/network/android_push_service.dart';
 
 enum StartupSessionStatus {
   authenticated,
@@ -128,6 +129,7 @@ class AuthService {
     // Local sign-out must not wait for DNS/HTTP timeouts after network loss.
     // Revoke the captured credential on the server as a bounded best effort.
     final refresh = await _session.getRefreshToken();
+    try { await AndroidPushService.instance.signOut(); } catch (_) {}
     await _session.clear();
     // The embedded prod website may own a separate browser-cookie session.
     // Clearing it prevents the next native account from inheriting its browser

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/network/android_push_service.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../core/theme/app_dropdown_theme.dart';
@@ -32,6 +34,58 @@ class MainNavigationScreen extends StatefulWidget {
 
 class _MainNavigationScreenState extends State<MainNavigationScreen> {
   int _currentIndex = 0;
+  GlobalKey<NavigatorState> _shellNavigatorKey = GlobalKey<NavigatorState>();
+  bool _openingPush = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AndroidPushService.instance.tappedNotificationId.addListener(_onPushTapped);
+    unawaited(AndroidPushService.instance.activate());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onPushTapped());
+  }
+
+  @override
+  void didUpdateWidget(covariant MainNavigationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentLanguage != widget.currentLanguage ||
+        oldWidget.currentThemeMode != widget.currentThemeMode) {
+      _shellNavigatorKey = GlobalKey<NavigatorState>();
+    }
+  }
+
+  @override
+  void dispose() {
+    AndroidPushService.instance.tappedNotificationId.removeListener(_onPushTapped);
+    super.dispose();
+  }
+
+  void _onPushTapped() {
+    if (!mounted || _openingPush ||
+        AndroidPushService.instance.pendingNotificationId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _openingPush) return;
+      final navigator = _shellNavigatorKey.currentState;
+      if (navigator == null) return;
+      final notificationId = AndroidPushService.instance.takePendingNotificationId();
+      if (notificationId == null) return;
+      _openingPush = true;
+      try {
+        await navigator.push(MaterialPageRoute<void>(
+          builder: (_) => NotificationsScreen(
+            openNotificationId: notificationId,
+            onDestinationChanged: _setNotificationDestination,
+          ),
+        ));
+      } finally {
+        _openingPush = false;
+        if (mounted && AndroidPushService.instance.pendingNotificationId != null) {
+          _onPushTapped();
+        }
+      }
+    });
+  }
+
   DashboardQuickAction? _pendingQuickAction;
   int _quickActionLaunchId = 0;
   int _tabNavigationVersion = 0;
@@ -56,6 +110,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _pendingQuickAction = null;
       _notificationDestinationIndex = null;
       _tabNavigationVersion++;
+      _shellNavigatorKey = GlobalKey<NavigatorState>();
     });
   }
 
@@ -64,6 +119,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       _pendingQuickAction = action;
       _notificationDestinationIndex = null;
       _quickActionLaunchId++;
+      _shellNavigatorKey = GlobalKey<NavigatorState>();
       _currentIndex = switch (action) {
         DashboardQuickAction.conversation => 1,
         DashboardQuickAction.task => 2,
@@ -245,11 +301,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         // The root MaterialApp already owns a HeroController; never attach
         // the same controller to this nested body navigator.
         child: Navigator(
-          key: ValueKey<String>(
-            'app-shell-$_currentIndex-$_quickActionLaunchId-'
-            '$_tabNavigationVersion-${widget.currentLanguage}-'
-            '${widget.currentThemeMode}',
-          ),
+          key: _shellNavigatorKey,
           onGenerateRoute: (settings) => MaterialPageRoute<void>(
             settings: settings,
             builder: (_) => screens[_currentIndex],

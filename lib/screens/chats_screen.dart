@@ -997,7 +997,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       context: context,
       barrierColor: Colors.black.withValues(alpha: 0.38),
       builder: (context) {
-        final palette = Theme.of(context).extension<AppPalette>()!;
+        final palette = Theme.of(context).extension<AppPalette>() ??
+            (Theme.of(context).brightness == Brightness.dark
+                ? AppPalette.dark : AppPalette.light);
         return Center(
           child: Material(
             color: Colors.transparent,
@@ -1282,7 +1284,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = Theme.of(context).extension<AppPalette>()!;
+    final palette = Theme.of(context).extension<AppPalette>() ??
+        (Theme.of(context).brightness == Brightness.dark
+            ? AppPalette.dark : AppPalette.light);
     return Scaffold(
       backgroundColor: palette.page,
       appBar: _chatAppBar(palette),

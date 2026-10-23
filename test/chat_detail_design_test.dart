@@ -207,6 +207,54 @@ void main() {
     });
   }
 
+  for (final mode in [Brightness.light, Brightness.dark]) {
+    testWidgets('empty space dismisses long press overlay in $mode',
+        (tester) async {
+      final service = DesignChatService();
+      await showChat(
+        tester, mode == Brightness.light ? AppTheme.light : AppTheme.dark,
+        service,
+      );
+      await tester.longPress(find.text('My reply'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('chat-action-dismiss-region')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-action-backdrop')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-message-actions')),
+          findsOneWidget);
+
+      // x=4 is outside the anchored menu (which begins at x=14).
+      await tester.tapAt(const Offset(4, 180));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-action-backdrop')), findsNothing);
+      expect(find.byKey(const ValueKey('chat-message-actions')), findsNothing);
+      expect(find.text('My reply'), findsOneWidget);
+      expect(service.reactions, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('system back dismisses long press overlay in $mode',
+        (tester) async {
+      await showChat(
+        tester, mode == Brightness.light ? AppTheme.light : AppTheme.dark,
+        DesignChatService(),
+      );
+      await tester.longPress(find.text('A message from colleague'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-message-actions')),
+          findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-action-backdrop')), findsNothing);
+      expect(find.byKey(const ValueKey('chat-message-actions')), findsNothing);
+      expect(find.text('A message from colleague'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('offline peer keeps a clean single-line header', (tester) async {
     await showChat(
       tester, AppTheme.dark, DesignChatService(), isOnline: false,

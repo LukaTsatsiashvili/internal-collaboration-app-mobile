@@ -135,7 +135,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
       }
     } catch (error) {
       if (!mounted || version != _loadVersion) return;
-      setState(() {
+      if (!silent || _requests.isEmpty) setState(() {
         _errorMessage = error.toString().replaceFirst('Exception: ', '');
       });
     } finally {

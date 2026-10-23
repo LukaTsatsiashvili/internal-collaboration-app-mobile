@@ -473,6 +473,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ),
                   if (active)
                     Positioned(
+                      key: ValueKey('chat-online-$conversationId'),
                       right: -2,
                       bottom: -2,
                       child: Container(

@@ -42,10 +42,17 @@ class RealtimeClient with WidgetsBindingObserver {
         unawaited(_sync());
         // The prod deadline worker writes notifications directly to the DB
         // and does not emit Socket.IO events. Reconcile them once per minute.
-        if ((++_checkCount).isEven) _dispatch('notification:reconcile', null);
+        if ((++_checkCount).isEven) {
+          _dispatch('notification:reconcile', null);
+          // Presence TTLs can expire without a clean disconnect event
+          // (for example when an inactive browser throttles heartbeats).
+          _dispatch('presence:reconcile', null);
+        }
       });
     }
-    if (event != 'connect' && event != 'notification:reconcile') {
+    if (event != 'connect' &&
+        event != 'notification:reconcile' &&
+        event != 'presence:reconcile') {
       _wireEvent(event);
     }
     unawaited(_sync());
@@ -175,7 +182,9 @@ class RealtimeClient with WidgetsBindingObserver {
         }
       });
       for (final event in _listeners.values.map((item) => item.event).toSet()) {
-        if (event != 'connect' && event != 'notification:reconcile') {
+        if (event != 'connect' &&
+            event != 'notification:reconcile' &&
+            event != 'presence:reconcile') {
           _wireEvent(event);
         }
       }

@@ -81,6 +81,15 @@ class ChatService {
     throw StateError('ჩათების მონაცემები არასწორი ფორმატით დაბრუნდა');
   }
 
+  /// Persist the read state on prod (including the message receipt rows).
+  /// Merely opening the chat must not clear a badge only on this device.
+  Future<void> markConversationRead(String conversationId) async {
+    await _apiClient.dio.post(
+      '/conversations/${Uri.encodeComponent(conversationId)}/read',
+      data: const <String, dynamic>{'all': true},
+    );
+  }
+
   Future<List<dynamic>> getMessages(String conversationId) async {
     try {
       final response = await _apiClient.dio.get(
@@ -193,6 +202,8 @@ class ChatService {
       'conversation:updated',
       'conversation:removed',
       'conversation:read-updated',
+      'message:receipt-updated',
+      'presence:updated',
     ]) {
       _socketSubscriptions.add(realtime.listen(event, (_) => onChanged()));
     }

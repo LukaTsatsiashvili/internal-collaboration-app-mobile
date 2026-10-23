@@ -555,11 +555,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
       return const Center(child: CircularProgressIndicator(color: _blue));
     }
     if (_errorMessage != null && _chats.isEmpty) {
-      return SingleChildScrollView(
-        child: AppLoadErrorState(
-          description: _errorMessage,
-          onRetry: _loadData,
-        ),
+      return AppLoadErrorViewport(
+        description: _errorMessage,
+        onRetry: _loadData,
       );
     }
 
@@ -1070,14 +1068,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 child: _isLoading && _messages.isEmpty
                     ? const Center(child: CircularProgressIndicator())
                     : _loadError != null && _messages.isEmpty
-                    ? Center(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(14),
-                          child: AppLoadErrorState(
-                            description: _loadError,
-                            onRetry: _initializeChat,
-                          ),
-                        ),
+                    ? AppLoadErrorViewport(
+                        description: _loadError,
+                        onRetry: _initializeChat,
                       )
                     : _messages.isEmpty
                     ? const Center(child: Text('დაიწყეთ საუბარი...'))
@@ -2109,12 +2102,10 @@ class _NewConversationDialogState extends State<NewConversationDialog> {
       child: _isLoadingUsers && _users.isEmpty
           ? const Center(child: CircularProgressIndicator())
           : _usersLoadError != null && _users.isEmpty
-          ? SingleChildScrollView(
-              child: AppLoadErrorState(
-                compact: true,
-                description: _usersLoadError,
-                onRetry: _loadUsers,
-              ),
+          ? AppLoadErrorViewport(
+              compact: true,
+              description: _usersLoadError,
+              onRetry: _loadUsers,
             )
           : visible.isEmpty
               ? Center(

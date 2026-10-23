@@ -7,6 +7,7 @@ import 'chats_screen.dart';
 import 'tasks_screen.dart';
 import 'approvals_screen.dart';
 import 'drive_screen.dart';
+import 'people_screen.dart';
 import 'notifications_screen.dart';
 import 'package:gtex_collab_app/features/auth/data/presentation/login_screen.dart';
 import 'package:gtex_collab_app/features/auth/data/auth_service.dart';
@@ -49,7 +50,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
   /// Normal tab navigation (including dashboard metric cards) replaces the
   /// current stack with that module's root, without opening New Task/Request.
   void _navigateToTab(int index) {
-    if (!mounted || index < 0 || index > 4) return;
+    if (!mounted || index < 0 || index > 5) return;
     setState(() {
       _currentIndex = index;
       _pendingQuickAction = null;
@@ -86,6 +87,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       Icons.task_outlined,
       Icons.approval_outlined,
       Icons.folder_outlined,
+      Icons.people_outline_rounded,
     ];
     const selectedDestinations = <IconData>[
       Icons.grid_view_rounded,
@@ -93,6 +95,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       Icons.task_rounded,
       Icons.approval_rounded,
       Icons.folder_rounded,
+      Icons.people_rounded,
     ];
     const labels = <String>[
       'მთავარი',
@@ -100,6 +103,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       'დავალებები',
       'მოთხოვნები',
       'Drive',
+      'People',
     ];
 
     return ColoredBox(
@@ -227,6 +231,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _pendingQuickAction == DashboardQuickAction.request,
       ),
       const DriveScreen(),
+      const PeopleScreen(),
     ];
 
     return Scaffold(

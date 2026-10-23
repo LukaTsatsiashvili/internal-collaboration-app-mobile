@@ -119,6 +119,46 @@ class AppLoadErrorState extends StatelessWidget {
   }
 }
 
+/// Place the shared error card in the available module viewport instead of
+/// leaving it at the top of a short, empty list. The scroll view remains
+/// usable on compact devices and supports a parent RefreshIndicator.
+class AppLoadErrorViewport extends StatelessWidget {
+  const AppLoadErrorViewport({
+    super.key,
+    required this.onRetry,
+    this.description,
+    this.compact = false,
+  });
+
+  final VoidCallback onRetry;
+  final String? description;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(14),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: constraints.hasBoundedHeight
+                ? (constraints.maxHeight - 28).clamp(0.0, double.infinity)
+                : 0,
+          ),
+          child: Center(
+            child: AppLoadErrorState(
+              onRetry: onRetry,
+              description: description,
+              compact: compact,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Non-blocking notice while previously loaded records remain visible.
 class AppLoadErrorNotice extends StatelessWidget {
   const AppLoadErrorNotice({super.key, required this.onRetry});

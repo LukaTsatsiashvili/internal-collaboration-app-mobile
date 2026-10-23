@@ -149,6 +149,9 @@ void main() {
       ],
     });
     service.socketCallback?.call(service.history.last);
+    // The read receipt is intentionally debounced (150ms); pumpAndSettle
+    // alone can complete before a timer schedules its next frame.
+    await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
     expect(find.text('Second unread'), findsOneWidget);
     expect(service.marks, 2);

@@ -204,6 +204,7 @@ class ChatService {
       'conversation:read-updated',
       'message:receipt-updated',
       'presence:updated',
+      'presence:reconcile',
     ]) {
       _socketSubscriptions.add(realtime.listen(event, (_) => onChanged()));
     }

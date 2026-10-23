@@ -622,6 +622,7 @@ class _NotificationBellButtonState extends State<NotificationBellButton>
     with WidgetsBindingObserver {
   final NotificationService _service = NotificationService();
   int _unread = 0;
+  int _refreshVersion = 0;
 
   @override
   void initState() {
@@ -642,9 +643,12 @@ class _NotificationBellButtonState extends State<NotificationBellButton>
   }
 
   Future<void> _refresh() async {
+    final version = ++_refreshVersion;
     try {
       final inbox = await _service.getInbox();
-      if (mounted) setState(() => _unread = inbox.unreadCount);
+      if (mounted && version == _refreshVersion) {
+        setState(() => _unread = inbox.unreadCount);
+      }
     } catch (_) {}
   }
 
@@ -655,6 +659,7 @@ class _NotificationBellButtonState extends State<NotificationBellButton>
 
   @override
   void dispose() {
+    _refreshVersion++;
     WidgetsBinding.instance.removeObserver(this);
     _service.disposeSocket();
     super.dispose();

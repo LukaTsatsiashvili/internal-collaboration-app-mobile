@@ -1010,7 +1010,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 24),
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
               decoration: BoxDecoration(
-                color: palette.panel,
+                // The surrounding Material paints the surface; painting
+                // another opaque color between it and ListTiles hides ink.
                 border: Border.all(color: palette.cardBorder),
                 borderRadius: BorderRadius.circular(24),
                 boxShadow: [

@@ -126,7 +126,7 @@ class _TasksScreenState extends State<TasksScreen> {
       });
     } catch (error) {
       if (!mounted || requestId != _loadRequestId) return;
-      setState(() {
+      if (!silent || _tasks.isEmpty) setState(() {
         _errorMessage = error.toString().replaceAll('Exception: ', '');
       });
     } finally {

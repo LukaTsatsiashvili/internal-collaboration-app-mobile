@@ -231,6 +231,16 @@ void main() {
       expect(find.byKey(const ValueKey('chat-action-backdrop')), findsNothing);
       expect(find.byKey(const ValueKey('chat-message-actions')), findsNothing);
       expect(find.text('My reply'), findsOneWidget);
+
+      // Also handle blank space BESIDE the floating card but inside its
+      // scrollable layout's horizontal bounds (x=20 > left margin 14).
+      await tester.longPress(find.text('My reply'));
+      await tester.pumpAndSettle();
+      final cardRect =
+          tester.getRect(find.byKey(const ValueKey('chat-message-actions')));
+      await tester.tapAt(Offset(20, cardRect.center.dy));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-message-actions')), findsNothing);
       expect(service.reactions, isEmpty);
       expect(tester.takeException(), isNull);
     });

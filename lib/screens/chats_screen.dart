@@ -1024,8 +1024,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 2,
+                    runSpacing: 2,
                     children: ['👍', '❤️', '🔥', '👏', '😂', '🎉'].map((emoji) {
                       return InkWell(
                         borderRadius: BorderRadius.circular(30),

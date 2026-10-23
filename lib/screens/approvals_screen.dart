@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/network/realtime_client.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
@@ -39,6 +41,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   List<dynamic> _groups = [];
   List<String> _groupOrder = [];
   int _loadVersion = 0;
+  Timer? _liveReloadTimer;
+  final List<void Function()> _liveSubscriptions = [];
   
   bool _isCreatingGroup = false;
   String? _busyGroupId;
@@ -52,6 +56,13 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     super.initState();
     _approvalService = widget.service ?? ApprovalService();
     _fetchApprovals();
+    if (widget.service == null) {
+      for (final event in ['connect', 'approval:updated']) {
+        _liveSubscriptions.add(RealtimeClient.instance.listen(
+          event, (_) => _scheduleLiveReload(),
+        ));
+      }
+    }
     if (widget.openCreateOnStart) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _openNewRequestDialog();
@@ -59,13 +70,22 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
     }
   }
 
-  Future<void> _fetchApprovals() async {
+  void _scheduleLiveReload() {
+    _liveReloadTimer?.cancel();
+    _liveReloadTimer = Timer(const Duration(milliseconds: 140), () {
+      if (mounted) unawaited(_fetchApprovals(silent: true));
+    });
+  }
+
+  Future<void> _fetchApprovals({bool silent = false}) async {
     final version = ++_loadVersion;
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final requests = await _approvalService.getApprovalRequests();
@@ -94,6 +114,7 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
         _groups = groups;
         _approvalTypes = types;
         _currentUserId = userId;
+        _errorMessage = null;
         // Preserve temporary on-screen drag order when refreshing.
         _groupOrder = [
           ..._groupOrder.where(ids.contains),
@@ -127,6 +148,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
   @override
   void dispose() {
     _loadVersion++;
+    _liveReloadTimer?.cancel();
+    for (final stop in _liveSubscriptions) { stop(); }
     _searchController.dispose();
     super.dispose();
   }

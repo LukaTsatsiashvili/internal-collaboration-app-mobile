@@ -8,6 +8,12 @@ import 'package:gtex_collab_app/screens/chats_screen.dart';
 
 class DesignChatService extends ChatService {
   final sent = <String>[];
+  final reactions = <String>[];
+
+  @override
+  Future<void> addReaction(String messageId, String emoji) async {
+    reactions.add('$messageId:$emoji');
+  }
 
   @override
   Future<List<dynamic>> getMessages(String id) async => [
@@ -138,8 +144,16 @@ void main() {
 
       await tester.longPress(find.text('A message from colleague'));
       await tester.pumpAndSettle();
-      expect(find.text('პასუხის გაცემა (Reply)'), findsOneWidget);
-      await tester.tap(find.text('პასუხის გაცემა (Reply)'));
+      expect(find.byKey(const ValueKey('chat-action-backdrop')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-reaction-bar')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-selected-message')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-message-actions')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-action-reply')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-action-edit')), findsNothing);
+      expect(find.byKey(const ValueKey('chat-action-delete')), findsNothing);
+      expect(find.text('პასუხის გაცემა (Reply)'), findsNothing);
+      expect(find.text('უპასუხე'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chat-action-reply')));
       await tester.pumpAndSettle();
       expect(find.text('პასუხი: System Administrator'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -161,9 +175,37 @@ void main() {
     expect(find.byKey(const ValueKey('chat-detail-send')), findsOneWidget);
     await tester.longPress(find.text('A message from colleague'));
     await tester.pumpAndSettle();
-    expect(find.text('პასუხის გაცემა (Reply)'), findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-action-reply')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final mode in [Brightness.light, Brightness.dark]) {
+    testWidgets('own message action card and more emoji work in $mode',
+        (tester) async {
+      final service = DesignChatService();
+      await showChat(tester,
+          mode == Brightness.light ? AppTheme.light : AppTheme.dark, service);
+      await tester.longPress(find.text('My reply'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-action-edit')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-action-delete')), findsOneWidget);
+      expect(find.byKey(const ValueKey('chat-reaction-more')), findsOneWidget);
+      expect(find.text('სხვა რეაქცია'), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('chat-reaction-more')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('chat-more-reactions')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('chat-extra-reaction-🔥')));
+      await tester.pumpAndSettle();
+      expect(service.reactions, ['outgoing:🔥']);
+
+      await tester.longPress(find.text('My reply'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('chat-action-edit')));
+      await tester.pumpAndSettle();
+      expect(find.text('შეტყობინების რედაქტირება'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('offline peer keeps a clean single-line header', (tester) async {
     await showChat(

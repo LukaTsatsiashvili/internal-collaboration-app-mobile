@@ -120,6 +120,25 @@ void main() {
     });
   }
 
+  testWidgets('narrow phone keeps composer and actions within screen',
+      (tester) async {
+    tester.view.physicalSize = const Size(340, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+
+    await showChat(tester, AppTheme.light, DesignChatService());
+    expect(find.byKey(const ValueKey('chat-detail-composer-area')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('chat-detail-send')), findsOneWidget);
+    await tester.longPress(find.text('A message from colleague'));
+    await tester.pumpAndSettle();
+    expect(find.text('პასუხის გაცემა (Reply)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('group header uses the group label instead of person status',
       (tester) async {
     await showChat(tester, AppTheme.light, DesignChatService(), isGroup: true);

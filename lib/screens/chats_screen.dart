@@ -1817,125 +1817,210 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
 
               if (_editingMessageId != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  color: Colors.blueGrey.withValues(alpha: 0.3),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.edit,
-                        size: 20,
-                        color: Colors.blueAccent,
-                      ),
-                      const SizedBox(width: 8),
-                      const Expanded(
-                        child: Text(
-                          'შეტყობინების რედაქტირება',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blueAccent,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 5, 12, 0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.panel,
+                      border: Border.all(color: palette.cardBorder),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.edit_outlined,
+                            size: 18, color: AppColors.primary),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Text(
+                            'შეტყობინების რედაქტირება',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: palette.ink,
+                            ),
                           ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _editingMessageId = null;
-                            _messageController.clear();
-                          });
-                        },
-                      ),
-                    ],
+                        IconButton(
+                          tooltip: 'რედაქტირების გაუქმება',
+                          icon: Icon(Icons.close_rounded,
+                              size: 18, color: palette.secondaryText),
+                          onPressed: () {
+                            setState(() {
+                              _editingMessageId = null;
+                              _messageController.clear();
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
               if (_replyingToMessageId != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.reply, size: 20, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'პასუხი: $_replyingToSenderName',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 5, 12, 0),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.panel,
+                      border: Border.all(color: palette.cardBorder),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.reply_rounded,
+                            size: 19, color: AppColors.primary),
+                        const SizedBox(width: 9),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'პასუხი: $_replyingToSenderName',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.primary,
+                                ),
                               ),
-                            ),
-                            Text(
-                              _replyingToContent ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                _replyingToContent ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: palette.secondaryText,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        onPressed: () {
-                          setState(() {
-                            _replyingToMessageId = null;
-                            _replyingToContent = null;
-                            _replyingToSenderName = null;
-                          });
-                        },
-                      ),
-                    ],
+                        IconButton(
+                          tooltip: 'პასუხის გაუქმება',
+                          icon: Icon(Icons.close_rounded,
+                              size: 18, color: palette.secondaryText),
+                          onPressed: () {
+                            setState(() {
+                              _replyingToMessageId = null;
+                              _replyingToContent = null;
+                              _replyingToSenderName = null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
                   ),
                 ),
 
-              // ტექსტური ველი და მიმაგრების (Attach) ღილაკი
+              // Theme-consistent composer. Existing attach/send callbacks
+              // and editing/reply state remain exactly the same.
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: _isUploadingFile
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.attach_file, color: Colors.grey),
-                      onPressed: _isUploadingFile ? null : _pickAndSendFile,
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: InputDecoration(
-                          hintText: _editingMessageId != null
-                              ? 'შეცვალეთ შეტყობინება...'
-                              : 'დაწერეთ შეტყობინება...',
-                          border: InputBorder.none,
+                key: const ValueKey('chat-detail-composer-area'),
+                decoration: BoxDecoration(
+                  color: palette.panel,
+                  border: Border(top: BorderSide(color: palette.cardBorder)),
+                ),
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: BorderRadius.circular(19),
+                    border: Border.all(color: palette.cardBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: palette.cardShadow,
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      IconButton(
+                        key: const ValueKey('chat-detail-attach'),
+                        tooltip: 'ფაილის მიმაგრება',
+                        icon: _isUploadingFile
+                            ? const SizedBox(
+                                width: 20, height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : Icon(Icons.attach_file_rounded,
+                                color: palette.secondaryText, size: 22),
+                        onPressed: _isUploadingFile ? null : _pickAndSendFile,
+                      ),
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('chat-detail-message-input'),
+                          controller: _messageController,
+                          keyboardType: TextInputType.multiline,
+                          minLines: 1,
+                          maxLines: 4,
+                          style: TextStyle(color: palette.ink, fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: _editingMessageId != null
+                                ? 'შეცვალეთ შეტყობინება...'
+                                : 'დაწერეთ შეტყობინება...',
+                            hintStyle: TextStyle(
+                              color: palette.hintText, fontSize: 12.5,
+                            ),
+                            filled: false,
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 3, vertical: 15,
+                            ),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                          ),
                         ),
                       ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        _editingMessageId != null ? Icons.check : Icons.send,
-                        color: Colors.blue,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 4, 5, 4),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [
+                              AppColors.gradientStart, AppColors.gradientEnd,
+                            ]),
+                            borderRadius: BorderRadius.circular(13),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.20),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            key: const ValueKey('chat-detail-send'),
+                            tooltip: _editingMessageId != null
+                                ? 'ცვლილების შენახვა'
+                                : 'გაგზავნა',
+                            onPressed: _sendMessage,
+                            style: IconButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(39, 39),
+                              padding: const EdgeInsets.all(8),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            icon: Icon(
+                              _editingMessageId != null
+                                  ? Icons.check_rounded
+                                  : Icons.send_rounded,
+                              size: 19,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
-                      onPressed: _sendMessage,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],

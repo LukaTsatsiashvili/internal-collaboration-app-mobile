@@ -403,7 +403,12 @@ class _NotificationsScreenState extends State<NotificationsScreen>
         ),
         child: RefreshIndicator(
           onRefresh: () => _load(silent: true),
-          child: ListView(
+          child: _error != null && _items.isEmpty && !_loading
+              ? AppLoadErrorViewport(
+                  description: _error,
+                  onRetry: () => _load(),
+                )
+              : ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(13, 13, 13, 25),
             children: [
@@ -415,11 +420,6 @@ class _NotificationsScreenState extends State<NotificationsScreen>
                 const Padding(
                   padding: EdgeInsets.all(30),
                   child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_error != null && _items.isEmpty)
-                AppLoadErrorState(
-                  description: _error,
-                  onRetry: () => _load(),
                 )
               else if (_visibleItems.isEmpty)
                 const Padding(

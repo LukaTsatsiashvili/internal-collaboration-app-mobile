@@ -823,8 +823,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     if (incoming['__realtimeDeleted'] == true) {
       if (index < 0) return;
       setState(() {
-        _messages[index] = {
-          ..._messages[index],
+        _messages[index] = <String, dynamic>{
+          ...Map<String, dynamic>.from(_messages[index] as Map),
           'content': '',
           'attachments': <dynamic>[],
           'deletedAt': DateTime.now().toUtc().toIso8601String(),
@@ -835,9 +835,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     setState(() {
       if (index >= 0) {
         final previous = _messages[index];
-        _messages[index] = {
-          ...previous,
-          ...incoming,
+        _messages[index] = <String, dynamic>{
+          ...Map<String, dynamic>.from(previous as Map),
+          ...Map<String, dynamic>.from(incoming),
           'content': incoming['content'] ?? previous['content'] ?? '',
           'senderId': incoming['senderId'] ?? previous['senderId'],
           'sender': incoming['sender'] ?? previous['sender'],
@@ -1004,7 +1004,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ? AppPalette.dark : AppPalette.light);
         return Center(
           child: Material(
-            color: Colors.transparent,
+            color: palette.panel,
+            borderRadius: BorderRadius.circular(24),
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
               padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),

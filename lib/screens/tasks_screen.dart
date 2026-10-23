@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/network/realtime_client.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_theme_extensions.dart';
 import '../core/theme/app_dropdown_theme.dart';
@@ -36,6 +38,8 @@ class _TasksScreenState extends State<TasksScreen> {
   bool _isCreatingTask = false;
   String? _busyGroupId;
   int _loadRequestId = 0;
+  final List<void Function()> _liveSubscriptions = [];
+  Timer? _liveReloadTimer;
   List<dynamic> _tasks = [];
   List<dynamic> _groups = [];
   String? _errorMessage;
@@ -71,6 +75,14 @@ class _TasksScreenState extends State<TasksScreen> {
     // Wait for personal groups before opening the Dashboard-created form:
     // otherwise its Group dropdown would be incorrectly empty at launch.
     final loading = _loadData();
+    if (widget.service == null) {
+      for (final event in ['connect', 'task:created', 'task:updated',
+        'task:comment-created']) {
+        _liveSubscriptions.add(RealtimeClient.instance.listen(
+          event, (_) => _scheduleLiveReload(),
+        ));
+      }
+    }
     if (widget.openCreateOnStart) {
       loading.then((_) {
         if (mounted) _showNewTaskBottomSheet();
@@ -78,13 +90,22 @@ class _TasksScreenState extends State<TasksScreen> {
     }
   }
 
-  Future<void> _loadData() async {
+  void _scheduleLiveReload() {
+    _liveReloadTimer?.cancel();
+    _liveReloadTimer = Timer(const Duration(milliseconds: 140), () {
+      if (mounted) unawaited(_loadData(silent: true));
+    });
+  }
+
+  Future<void> _loadData({bool silent = false}) async {
     final requestId = ++_loadRequestId;
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       // Fetch the full accessible list once: every category/search/sort is
@@ -101,6 +122,7 @@ class _TasksScreenState extends State<TasksScreen> {
         _tasks = results[0] as List<dynamic>;
         _groups = results[1] as List<dynamic>;
         _currentUserId = results[2] as String;
+        _errorMessage = null;
       });
     } catch (error) {
       if (!mounted || requestId != _loadRequestId) return;
@@ -117,6 +139,8 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   void dispose() {
     _loadRequestId++;
+    _liveReloadTimer?.cancel();
+    for (final stop in _liveSubscriptions) { stop(); }
     _searchController.dispose();
     super.dispose();
   }

@@ -27,6 +27,7 @@ class RealtimeClient with WidgetsBindingObserver {
   bool _recoveringAuth = false;
   bool _foreground = true;
   Timer? _checkTimer;
+  int _checkCount = 0;
 
   void Function() listen(String event, void Function(dynamic) callback) {
     final first = _listeners.isEmpty;
@@ -34,12 +35,18 @@ class RealtimeClient with WidgetsBindingObserver {
     _listeners[id] = (event: event, callback: callback);
     if (first) {
       WidgetsBinding.instance.addObserver(this);
-      _checkTimer = Timer.periodic(
-        const Duration(seconds: 30),
-        (_) => unawaited(_sync()),
-      );
+      _checkCount = 0;
+      _checkTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!_foreground) return;
+        unawaited(_sync());
+        // The prod deadline worker writes notifications directly to the DB
+        // and does not emit Socket.IO events. Reconcile them once per minute.
+        if (++_checkCount.isEven) _dispatch('notification:reconcile', null);
+      });
     }
-    if (event != 'connect') _wireEvent(event);
+    if (event != 'connect' && event != 'notification:reconcile') {
+      _wireEvent(event);
+    }
     unawaited(_sync());
     return () {
       _listeners.remove(id);
@@ -156,7 +163,9 @@ class RealtimeClient with WidgetsBindingObserver {
         }
       });
       for (final event in _listeners.values.map((item) => item.event).toSet()) {
-        if (event != 'connect') _wireEvent(event);
+        if (event != 'connect' && event != 'notification:reconcile') {
+          _wireEvent(event);
+        }
       }
       socket.connect();
     } catch (_) {

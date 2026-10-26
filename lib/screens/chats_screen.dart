@@ -800,7 +800,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       debugPrint('READ_AUDIT calling markConversationRead');
       await _chatService.markConversationRead(widget.conversationId);
       debugPrint('READ_AUDIT markConversationRead complete');
-    } catch (_) {
+    } catch (error, stack) {
+      debugPrint('READ_AUDIT markConversationRead ERROR: $error; $stack');
       // Leave the server unread state intact if this request fails.
       // The next successful inbox/chat refresh can retry it.
     } finally {

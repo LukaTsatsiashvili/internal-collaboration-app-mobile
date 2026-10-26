@@ -790,13 +790,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _markRead() async {
+    debugPrint('READ_AUDIT enter _markRead inFlight=$_markReadInFlight room=${widget.conversationId}');
     if (_markReadInFlight) {
       _readAgain = true;
       return;
     }
     _markReadInFlight = true;
     try {
+      debugPrint('READ_AUDIT calling markConversationRead');
       await _chatService.markConversationRead(widget.conversationId);
+      debugPrint('READ_AUDIT markConversationRead complete');
     } catch (_) {
       // Leave the server unread state intact if this request fails.
       // The next successful inbox/chat refresh can retry it.

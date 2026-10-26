@@ -776,13 +776,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _scheduleMarkReadIfNeeded(List<dynamic> messages) {
-    // Temporary audit diagnostics; removed before the change is merged.
-    debugPrint('READ_AUDIT schedule mounted=$mounted current=${mounted ? ModalRoute.of(context)?.isCurrent : null} user=$_currentUserId unread=${messages.any(_hasUnreadReceipt)} inFlight=$_markReadInFlight');
     if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
     if (!messages.any(_hasUnreadReceipt)) return;
     _markReadTimer?.cancel();
     _markReadTimer = Timer(const Duration(milliseconds: 150), () {
-      debugPrint('READ_AUDIT timer mounted=$mounted current=${mounted ? ModalRoute.of(context)?.isCurrent : null}');
       if (mounted && ModalRoute.of(context)?.isCurrent == true) {
         unawaited(_markRead());
       }
@@ -790,18 +787,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Future<void> _markRead() async {
-    debugPrint('READ_AUDIT enter _markRead inFlight=$_markReadInFlight room=${widget.conversationId}');
     if (_markReadInFlight) {
       _readAgain = true;
       return;
     }
     _markReadInFlight = true;
     try {
-      debugPrint('READ_AUDIT calling markConversationRead');
       await _chatService.markConversationRead(widget.conversationId);
-      debugPrint('READ_AUDIT markConversationRead complete');
-    } catch (error, stack) {
-      debugPrint('READ_AUDIT markConversationRead ERROR: $error; $stack');
+    } catch (_) {
       // Leave the server unread state intact if this request fails.
       // The next successful inbox/chat refresh can retry it.
     } finally {

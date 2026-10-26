@@ -78,7 +78,7 @@ class ReceiptChatStub extends ChatService {
 
   @override
   Future<void> markConversationRead(String conversationId) async {
-    expect(conversationId, 'room-a');
+    expectSync(conversationId, 'room-a');
     marks++;
     for (final item in history) {
       final receipts = item['receipts'] as List?;

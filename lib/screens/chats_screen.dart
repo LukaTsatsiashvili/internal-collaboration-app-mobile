@@ -776,10 +776,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _scheduleMarkReadIfNeeded(List<dynamic> messages) {
+    // Temporary audit diagnostics; removed before the change is merged.
+    debugPrint('READ_AUDIT schedule mounted=$mounted current=${mounted ? ModalRoute.of(context)?.isCurrent : null} user=$_currentUserId unread=${messages.any(_hasUnreadReceipt)} inFlight=$_markReadInFlight');
     if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
     if (!messages.any(_hasUnreadReceipt)) return;
     _markReadTimer?.cancel();
     _markReadTimer = Timer(const Duration(milliseconds: 150), () {
+      debugPrint('READ_AUDIT timer mounted=$mounted current=${mounted ? ModalRoute.of(context)?.isCurrent : null}');
       if (mounted && ModalRoute.of(context)?.isCurrent == true) {
         unawaited(_markRead());
       }
